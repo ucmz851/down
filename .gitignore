@@ -1,0 +1,26 @@
+# Binaries & build outputs
+inlay
+build/
+*.o
+*.out
+*.tmp
+
+# Test binaries and temporary files
+test_*
+*.bin
+*.iso
+*.img
+
+# Inlay crash-recovery metadata state files
+*.inlay
+
+# Editor & OS temporary files
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+__pycache__/
+*.pyc
+

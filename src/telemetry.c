@@ -1,0 +1,305 @@
+#include "telemetry.h"
+#include <sys/ioctl.h>
+#include <sys/time.h>
+#include <math.h>
+
+#define TELEMETRY_REFRESH_US 35000 /* 35 ms = ~28.5 Hz high-frequency refresh */
+#define SPEED_WINDOW_CAPACITY 12   /* ~400 ms sliding window for instantaneous accuracy */
+
+typedef struct {
+    uint64_t timestamp_us;
+    uint64_t bytes;
+} speed_sample_t;
+
+uint64_t current_time_micros(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
+}
+
+void format_bytes(uint64_t bytes, char *buf, size_t buf_size) {
+    static const char *units[] = {"B", "KB", "MB", "GB", "TB"};
+    double size = (double)bytes;
+    int unit_idx = 0;
+    while (size >= 1024.0 && unit_idx < 4) {
+        size /= 1024.0;
+        unit_idx++;
+    }
+    if (unit_idx == 0) {
+        snprintf(buf, buf_size, "%" PRIu64 " B", bytes);
+    } else {
+        snprintf(buf, buf_size, "%.2f %s", size, units[unit_idx]);
+    }
+}
+
+static void format_speed(double speed, char *buf, size_t buf_size) {
+    static const char *units[] = {"B/s", "KB/s", "MB/s", "GB/s", "TB/s"};
+    int unit_idx = 0;
+    while (speed >= 1024.0 && unit_idx < 4) {
+        speed /= 1024.0;
+        unit_idx++;
+    }
+    if (unit_idx == 0) {
+        snprintf(buf, buf_size, "%.0f B/s", speed);
+    } else {
+        snprintf(buf, buf_size, "%.2f %s", speed, units[unit_idx]);
+    }
+}
+
+static void format_eta(uint64_t seconds, char *buf, size_t buf_size) {
+    if (seconds >= 3600) {
+        uint64_t hrs = seconds / 3600;
+        uint64_t mins = (seconds % 3600) / 60;
+        uint64_t secs = seconds % 60;
+        snprintf(buf, buf_size, "%02" PRIu64 ":%02" PRIu64 ":%02" PRIu64, hrs, mins, secs);
+    } else {
+        uint64_t mins = seconds / 60;
+        uint64_t secs = seconds % 60;
+        snprintf(buf, buf_size, "%02" PRIu64 ":%02" PRIu64, mins, secs);
+    }
+}
+
+void format_duration(uint64_t seconds, char *buf, size_t buf_size) {
+    if (seconds >= 3600) {
+        uint64_t hrs = seconds / 3600;
+        uint64_t mins = (seconds % 3600) / 60;
+        uint64_t secs = seconds % 60;
+        snprintf(buf, buf_size, "%" PRIu64 "h %02" PRIu64 "m %02" PRIu64 "s", hrs, mins, secs);
+    } else if (seconds >= 60) {
+        uint64_t mins = seconds / 60;
+        uint64_t secs = seconds % 60;
+        snprintf(buf, buf_size, "%02" PRIu64 "m %02" PRIu64 "s", mins, secs);
+    } else if (seconds > 0) {
+        snprintf(buf, buf_size, "%" PRIu64 "s", seconds);
+    } else {
+        snprintf(buf, buf_size, "< 1s");
+    }
+}
+
+static bool use_color(void) {
+    if (!isatty(STDOUT_FILENO)) return false;
+    const char *no_color = getenv("NO_COLOR");
+    if (no_color && *no_color) return false;
+    const char *term = getenv("TERM");
+    if (term && strcmp(term, "dumb") == 0) return false;
+    return true;
+}
+
+static void *telemetry_thread_fn(void *arg) {
+    inlay_telemetry_t *telem = (inlay_telemetry_t *)arg;
+    bool is_tty = isatty(STDOUT_FILENO);
+    bool color = use_color();
+
+    uint64_t start_time = current_time_micros();
+    uint64_t last_non_tty_log_time = start_time;
+
+    /* Sliding-window ring buffer for instantaneous rate calculation */
+    speed_sample_t samples[SPEED_WINDOW_CAPACITY];
+    int sample_head = 0;
+    int sample_count = 0;
+
+    static const char *sub_blocks[] = {"", "▏", "▎", "▍", "▌", "▋", "▊", "▉"};
+
+    while (!atomic_load(&telem->stop_requested)) {
+        usleep(TELEMETRY_REFRESH_US);
+
+        uint64_t now = current_time_micros();
+        uint64_t cur_bytes = atomic_load_explicit(&telem->downloaded_bytes, memory_order_relaxed);
+        uint64_t total = atomic_load_explicit(&telem->total_size, memory_order_relaxed);
+        int active_conn = atomic_load_explicit(&telem->active_connections, memory_order_relaxed);
+
+        /* Record new sample in ring buffer */
+        samples[sample_head].timestamp_us = now;
+        samples[sample_head].bytes = cur_bytes;
+        sample_head = (sample_head + 1) % SPEED_WINDOW_CAPACITY;
+        if (sample_count < SPEED_WINDOW_CAPACITY) {
+            sample_count++;
+        }
+
+        /* Calculate instantaneous rate over sliding window */
+        int ref_idx = (sample_head - sample_count + SPEED_WINDOW_CAPACITY) % SPEED_WINDOW_CAPACITY;
+        uint64_t dt_us = now - samples[ref_idx].timestamp_us;
+        uint64_t delta_bytes = (cur_bytes >= samples[ref_idx].bytes) ? (cur_bytes - samples[ref_idx].bytes) : 0;
+        double dt = (double)dt_us / 1000000.0;
+        double instant_speed = (dt > 0.02) ? ((double)delta_bytes / dt) : 0.0;
+
+        double percent = (total > 0) ? ((double)cur_bytes / (double)total) * 100.0 : 0.0;
+        if (percent > 100.0) percent = 100.0;
+
+        uint64_t remaining_bytes = (total > cur_bytes) ? (total - cur_bytes) : 0;
+        uint64_t eta_secs = (instant_speed > 512.0) ? (uint64_t)(remaining_bytes / instant_speed) : 0;
+
+        char cur_str[32], tot_str[32], spd_str[32], eta_str[32];
+        format_bytes(cur_bytes, cur_str, sizeof(cur_str));
+        format_bytes(total, tot_str, sizeof(tot_str));
+        format_speed(instant_speed, spd_str, sizeof(spd_str));
+        format_eta(eta_secs, eta_str, sizeof(eta_str));
+
+        if (is_tty) {
+            int term_cols = 80;
+            struct winsize ws;
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 30) {
+                term_cols = ws.ws_col;
+            }
+
+            /* Dynamically allocate progress bar width to fit the terminal */
+            int bar_width = term_cols - 64;
+            if (bar_width < 10) bar_width = 10;
+            if (bar_width > 35) bar_width = 35;
+
+            double progress = (total > 0) ? ((double)cur_bytes / (double)total) : 0.0;
+            if (progress < 0.0) progress = 0.0;
+            if (progress > 1.0) progress = 1.0;
+
+            double total_units = progress * (double)bar_width;
+            int full_blocks = (int)total_units;
+            int frac_idx = (int)((total_units - (double)full_blocks) * 8.0);
+            if (frac_idx > 7) frac_idx = 7;
+            bool has_frac = (frac_idx > 0);
+            int empty_blocks = bar_width - full_blocks - (has_frac ? 1 : 0);
+            if (empty_blocks < 0) empty_blocks = 0;
+
+            /* Build graphical bar */
+            char bar_buf[256] = {0};
+            size_t bpos = 0;
+
+            for (int i = 0; i < full_blocks && bpos + 4 < sizeof(bar_buf); i++) {
+                bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "█");
+            }
+            if (has_frac && bpos + 4 < sizeof(bar_buf)) {
+                bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "%s", sub_blocks[frac_idx]);
+            }
+            bar_buf[bpos] = '\0';
+
+            char empty_buf[128] = {0};
+            size_t epos = 0;
+            for (int i = 0; i < empty_blocks && epos + 4 < sizeof(empty_buf); i++) {
+                epos += (size_t)snprintf(empty_buf + epos, sizeof(empty_buf) - epos, "░");
+            }
+            empty_buf[epos] = '\0';
+
+            /* Render clean, instantaneous progress bar with ANSI colors */
+            if (color) {
+                printf("\r\033[K \033[1;37m%5.1f%%\033[0m \033[38;5;242m▕\033[38;5;39m%s\033[38;5;238m%s\033[38;5;242m▏\033[0m "
+                       "\033[1m%s\033[0m/%s  \033[1;32m%10s\033[0m  \033[1;33mETA %s\033[0m  \033[38;5;38m(%d conn)\033[0m",
+                       percent, bar_buf, empty_buf,
+                       cur_str, tot_str,
+                       spd_str,
+                       (instant_speed > 512.0 ? eta_str : "--:--"),
+                       active_conn);
+            } else {
+                printf("\r\033[K %5.1f%% ▕%s%s▏ %s/%s  %10s  ETA %s  (%d conn)",
+                       percent, bar_buf, empty_buf,
+                       cur_str, tot_str,
+                       spd_str,
+                       (instant_speed > 512.0 ? eta_str : "--:--"),
+                       active_conn);
+            }
+            fflush(stdout);
+        } else {
+            /* Non-interactive stream output (log file, pipe, CI) */
+            if ((now - last_non_tty_log_time) >= 1000000ULL) { /* Every 1s */
+                printf("[inlay] %5.1f%%   %s / %s   %10s   ETA %s   (%d conn)\n",
+                       percent, cur_str, tot_str, spd_str,
+                       (instant_speed > 512.0 ? eta_str : "--:--"), active_conn);
+                fflush(stdout);
+                last_non_tty_log_time = now;
+            }
+        }
+    }
+
+    return NULL;
+}
+
+int telemetry_init(inlay_telemetry_t *telem, uint64_t total_size, uint64_t initial_bytes, bool quiet) {
+    if (!telem) return -1;
+    memset(telem, 0, sizeof(*telem));
+    atomic_store(&telem->total_size, total_size);
+    atomic_store(&telem->downloaded_bytes, initial_bytes);
+    atomic_store(&telem->initial_bytes, initial_bytes);
+    atomic_store(&telem->active_connections, 0);
+    atomic_store(&telem->stop_requested, false);
+    telem->quiet = quiet;
+    telem->start_time_us = current_time_micros();
+    return 0;
+}
+
+int telemetry_start(inlay_telemetry_t *telem) {
+    if (!telem || telem->quiet) return 0;
+    return pthread_create(&telem->thread, NULL, telemetry_thread_fn, telem);
+}
+
+void telemetry_stop(inlay_telemetry_t *telem) {
+    if (!telem) return;
+    atomic_store(&telem->stop_requested, true);
+
+    if (!telem->quiet && telem->thread) {
+        pthread_join(telem->thread, NULL);
+        telem->thread = 0;
+
+        if (isatty(STDOUT_FILENO)) {
+            printf("\r\033[K"); /* Cleanly clear live progress bar */
+            fflush(stdout);
+        }
+    }
+}
+
+void telemetry_print_complete(const inlay_telemetry_t *telem, const char *filepath) {
+    if (!telem || telem->quiet) return;
+
+    uint64_t end_time = current_time_micros();
+    uint64_t total_us = end_time - telem->start_time_us;
+    double total_sec = (double)total_us / 1000000.0;
+    if (total_sec < 0.001) total_sec = 0.001;
+
+    uint64_t total_downloaded = atomic_load(&telem->downloaded_bytes);
+    uint64_t session_bytes = total_downloaded - atomic_load(&telem->initial_bytes);
+    double avg_speed = (double)session_bytes / total_sec;
+
+    char size_str[32], speed_str[32], dur_str[32];
+    format_bytes(total_downloaded, size_str, sizeof(size_str));
+    format_speed(avg_speed, speed_str, sizeof(speed_str));
+    format_duration((uint64_t)total_sec, dur_str, sizeof(dur_str));
+
+    bool color = use_color();
+    const char *dim = color ? "\033[38;5;244m" : "";
+    const char *bold = color ? "\033[1m" : "";
+    const char *green = color ? "\033[1;32m" : "";
+    const char *reset = color ? "\033[0m" : "";
+
+    printf("\n%s── Download Complete ───────────────────────────────────────────────────%s\n", dim, reset);
+    printf(" Destination : %s%s%s\n", bold, filepath, reset);
+    printf(" File Size   : %s%s%s (%" PRIu64 " bytes)\n", bold, size_str, reset, total_downloaded);
+    printf(" Time Elapsed: %s%s%s (Average: %s%s%s)\n", bold, dur_str, reset, green, speed_str, reset);
+    printf(" Status      : %sVerified 100%% chunks (control file cleaned up)%s\n", green, reset);
+    printf("%s─────────────────────────────────────────────────────────────────────────%s\n", dim, reset);
+    fflush(stdout);
+}
+
+void telemetry_print_paused(const inlay_telemetry_t *telem, const char *filepath,
+                            const char *meta_path, const char *url) {
+    if (!telem) return;
+
+    uint64_t cur = atomic_load(&telem->downloaded_bytes);
+    uint64_t total = atomic_load(&telem->total_size);
+    double percent = (total > 0) ? ((double)cur / (double)total) * 100.0 : 0.0;
+
+    char cur_str[32], tot_str[32];
+    format_bytes(cur, cur_str, sizeof(cur_str));
+    format_bytes(total, tot_str, sizeof(tot_str));
+
+    bool color = use_color();
+    const char *dim = color ? "\033[38;5;244m" : "";
+    const char *bold = color ? "\033[1m" : "";
+    const char *yellow = color ? "\033[1;33m" : "";
+    const char *cyan = color ? "\033[1;36m" : "";
+    const char *reset = color ? "\033[0m" : "";
+
+    printf("\n%s── Download Paused ─────────────────────────────────────────────────────%s\n", dim, reset);
+    printf(" Target File : %s%s%s\n", bold, filepath, reset);
+    printf(" Progress    : %s%s / %s (%.1f%% completed)%s\n", yellow, cur_str, tot_str, percent, reset);
+    printf(" State File  : %s%s%s (mmap state preserved)\n", bold, meta_path, reset);
+    printf(" Resume With : %sinlay -c -o %s %s%s\n", cyan, filepath, url, reset);
+    printf("%s─────────────────────────────────────────────────────────────────────────%s\n", dim, reset);
+    fflush(stdout);
+}
