@@ -1,242 +1,235 @@
-<div align="center">
+# Inlay
 
-# ⚡ Inlay
-### The Modern, Blazing-Fast Segmented Download Engine in C11
-**Zero-Assembly Positional I/O • Dynamic Work-Stealing • HTTP/3 QUIC • AWS SigV4 • Zero-Hash Crash Recovery**
+[![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/ucmz851/inlay?style=flat-square&color=green)](https://github.com/ucmz851/inlay/releases/latest)
+[![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
+[![Binary Size](https://img.shields.io/badge/Binary-~65%20KB-blueviolet.svg?style=flat-square)](#installation)
 
-[![Language](https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Build & Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
-[![Protocols](https://img.shields.io/badge/Protocols-HTTP%2F3%20(QUIC)%20%7C%20HTTP%2F2%20%7C%20S3-blueviolet.svg?style=flat-square)](#next-gen-protocols)
-[![Footprint](https://img.shields.io/badge/Binary-~80%20KB-orange.svg?style=flat-square)](#why-inlay)
-
-<br/>
-
-```text
-── inlay 0.0.1 ─────────────────────────────────────────────────────────
- Target   : llama-3-70b-instruct.Q4_K_M.gguf
- Size     : 42.60 GB (45741690880 bytes)
- Source   : s3://ai-weights-us/models/llama-3-70b-instruct.Q4_K_M.gguf
- Engine   : Dynamic Work-Stealing (16 workers, 2 MB chunk size)
- Protocol : HTTP/3 (QUIC) with fallback
- Auth     : AWS SigV4 (Region: us-east-1, Service: s3)
- Storage  : Contiguous blocks pre-allocated (posix_fallocate)
-─────────────────────────────────────────────────────────────────────────
-
-  78.4% ▕████████████▌░░░░▏ 33.40 GB/42.60 GB  412.80 MB/s  ETA 00:22  (16 conn)
-```
-
-</div>
+**Inlay** is a lightweight, high-throughput segmented download accelerator implemented in C11 for Linux systems. Designed for multi-gigabit network saturation and NVMe storage, it combines lockless parallel positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, and instantaneous zero-rehash crash recovery.
 
 ---
 
-## 🚀 Why Inlay?
+## Key Features
 
-Tired of 20-year-old C++ download managers, slow single-stream `curl` transfers, or installing 300MB Python packages just to download private S3 weights?
+- **Lockless Positional I/O**: Direct `pwrite()` writes to contiguous physical disk allocations pre-allocated via `posix_fallocate()`. Avoids temporary segment files, post-download concatenation delays, and ext4/XFS filesystem fragmentation.
+- **Dynamic Work-Stealing Scheduler**: Continuously balances transfer loads across connection pools. When unassigned chunks are exhausted, idle workers dynamically bisect the remaining byte ranges of slower tail connections to eliminate end-of-transfer stalling.
+- **Modern Protocol Transport**: First-class support for HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) multiplexed transport over UDP with automatic protocol negotiation and fallback.
+- **Direct Cloud Object Storage**: Native AWS Signature Version 4 (`AWS4-HMAC-SHA256`) signing for `s3://` URLs, enabling authenticated segmented downloads from Amazon S3, Cloudflare R2, MinIO, and Ceph without requiring external CLIs or SDK runtimes.
+- **Zero-Rehash Crash Recovery**: Transfer state is mirrored in a compact memory-mapped control file (`<filename>.inlay`) backed by atomic bitfields. Interrupted downloads resume immediately with `-c` without re-reading or hashing existing file blocks.
+- **Cryptographic Verification**: Automated post-download hash validation supporting SHA-256, SHA-512, MD5, SHA-1, and BLAKE2 with automatic algorithm inference from hex string lengths.
+- **Batch Processing**: Process multi-URL queue files with custom per-item output paths and checksum specifications (`-i, --input-file`).
+- **Minimal Footprint**: Standalone, statically or dynamically linked binary (~65 KB stripped) depending only on standard system libraries (`libcurl`, `OpenSSL`).
 
-`inlay` is engineered from scratch in clean **C11** for modern NVMe storage, multi-gigabit networks, and cloud-native workflows. It eliminates filesystem fragmentation, saturates network interfaces, and brings native HTTP/3 and direct AWS S3 / Cloudflare R2 request signing to a single, ultra-lightweight **~80 KB static binary**.
+---
 
-### 🥊 Feature Showdown: Inlay vs The Alternatives
+## Comparison
 
-| Feature | ⚡ **Inlay** | `aria2c` | `curl` | `wget` | `axel` |
+| Feature | Inlay | aria2c | curl | wget | axel |
 |:---|:---:|:---:|:---:|:---:|:---:|
-| **Language & Codebase** | **Modern C11** | Heavy C++98/11 | Clean C | Legacy C | Legacy C |
-| **Compiled Binary Size** | **~80 KB** | ~4.5 MB | ~3.2 MB | ~1.8 MB | ~130 KB |
-| **HTTP/3 (QUIC Multiplexing)** | **Native (`--http3`)** | ❌ No | ⚠️ Via flags | ❌ No | ❌ No |
-| **Native AWS S3 / Cloudflare R2** | **Native (`s3://` SigV4)** | ❌ No | ⚠️ Raw headers | ❌ No | ❌ No |
-| **Multi-Worker Segmented I/O** | **Lockless `pwrite`** | Lockless `pwrite` | ❌ Single-stream | ❌ Single-stream | Multi-thread |
-| **Work-Stealing & Lagger Bisection** | **Yes (Dynamic)** | Yes | ❌ N/A | ❌ N/A | ❌ (Static only) |
-| **Upfront Disk Pre-allocation** | **`posix_fallocate()`** | `falloc` | ❌ None | ❌ None | ❌ None |
-| **Instant Crash Resume** | **`mmap` Atomic Bitfield** | `.aria2` file | ❌ Manual Range | ❌ Manual `-c` | State file |
-| **Zero-Hash Instant Reconnect** | **Instant (Zero re-hash)** | Instant | ❌ N/A | ❌ N/A | Partial |
-| **Terminal Telemetry** | **28.5 Hz Unicode Sub-blocks** | 1-line text | Progress meter | Basic meter | Basic bars |
-| **Digest Verification** | **Auto-detect SHA/MD5/BLAKE** | Metalink only | ❌ Manual | ❌ Manual | ❌ No |
-| **Dependencies** | **libcurl + OpenSSL** | C++ runtime, XML, SSL | None / OpenSSL | OpenSSL | None |
+| **Language** | **C11** | C++ | C | C | C |
+| **Binary Size** | **~65 KB** | ~4.5 MB | ~3.2 MB | ~1.8 MB | ~130 KB |
+| **I/O Model** | **Lockless `pwrite()`** | Lockless `pwrite()` | Sequential | Sequential | Multi-thread |
+| **Disk Pre-allocation** | **`posix_fallocate()`** | Optional | None | None | None |
+| **Dynamic Work-Stealing** | **Yes** | Yes | N/A | N/A | No (Static only) |
+| **HTTP/3 (QUIC)** | **Native (`--http3`)** | No | Via flags | No | No |
+| **S3 / R2 SigV4 Signing** | **Native (`s3://`)** | No | Manual headers | No | No |
+| **Crash Recovery** | **`mmap` Bitfield** | State file | Range `-C -` | Range `-c` | State file |
+| **Checksum Verification** | **Auto-detected** | Metalink only | Manual | Manual | No |
+| **Dependencies** | **libcurl, OpenSSL** | OpenSSL, XML, C++ runtime | OpenSSL, zlib | GnuTLS / OpenSSL | OpenSSL |
 
 ---
 
-## 💎 The Four Superpowers of Inlay
+## Installation
 
-### 1. 🏎️ The Tail-Latency Killer: Dynamic Work-Stealing & Lagger Bisection
-Traditional segmented downloaders (like `axel`) split a file into $N$ equal chunks. If one TCP connection throttles or gets stuck on a bad route, **your entire download stalls at 99%** waiting for that one sluggish connection while all other workers sit completely idle.
+### Method 1: Automated Script (Recommended)
 
-`inlay` uses an active work-stealing allocator:
-* Workers lease contiguous chunk runs to minimize connection overhead.
-* When unassigned chunks are depleted, idle workers inspect active peers, identify the slowest connection ("the lagger"), and **bisect its remaining chunk range in real-time**.
-* Work is split atomically without redundant byte transfers or write collisions.
-
-```
-Worker 0 (Fast):  [████████████████████████] Done -> Steals upper 50% of Worker 2
-Worker 1 (Fast):  [████████████████████████] Done -> Steals upper 50% of Worker 3
-Worker 2 (Slow):  [████░░░░░░░░░░░░░░░░░░░░] -> Bisected! [████████] (Worker 0 takes the rest)
-Worker 3 (Lagging): [██░░░░░░░░░░░░░░░░░░░░] -> Bisected! [████] (Worker 1 takes the rest)
-```
-
-### 2. ⚡ Zero-Assembly Positional I/O (`posix_fallocate` + `pwrite`)
-Naive tools download segments into temporary files (`part0`, `part1`, ...) and then sequentially concatenate them when done, causing massive disk I/O thrashing on NVMe SSDs.
-
-`inlay` eliminates this entirely:
-1. **Contiguous Allocation**: `posix_fallocate()` claims physical disk extents before the first byte arrives. Prevents ext4/XFS extent fragmentation and instantly detects `ENOSPC` (out of disk space).
-2. **Lockless `pwrite()`**: All worker threads write directly into their designated byte offsets in the shared file descriptor. **Zero file-level mutex locks. Zero concatenation stalls.**
-
-### 3. 🌐 Cloud-Native S3 & Cloudflare R2 Direct SigV4
-Why install the multi-hundred-megabyte AWS CLI or write a Python `boto3` script just to download a dataset or model weights?
-* Simply pass `s3://my-bucket/path/file.bin`!
-* `inlay` automatically performs AWS Signature Version 4 (`AWS4-HMAC-SHA256`) request signing on every segmented ranged request.
-* Works seamlessly with **Amazon S3**, **Cloudflare R2**, **MinIO**, **Backblaze B2**, and **Ceph**.
-* Credentials automatically resolve from environment variables (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, `AWS_SESSION_TOKEN`) or dedicated flags.
-
-### 4. 🛡️ Bulletproof Crash Recovery (`.inlay` mmap Control File)
-If your network drops, power cuts, or you hit `Ctrl+C`:
-* State is maintained in a memory-mapped binary header (`<file>.inlay`) backed by an atomic bitfield (1 bit per chunk: a 10 GB file with 512 KB chunks requires only 2.5 KB of metadata).
-* **Resume is instantaneous with `-c`**: No need to spend minutes re-hashing gigabytes of data on disk.
-* Upon 100% completion, `.inlay` is automatically and cleanly unlinked.
-
----
-
-## 📊 Beautiful 28.5 Hz ANSI Terminal Telemetry
-
-Engineered for precision and aesthetic clarity without terminal flicker:
-* **Fractional Unicode Sub-blocks**: Smooth sub-character progress resolution (`█`, `▉`, `▊`, `▋`, `▌`, `▍`, `▎`, `▏`).
-* **Instantaneous Throughput**: 1-second sliding time-window rate estimator with byte/sec, KB/s, MB/s, and GB/s auto-scaling.
-* **Non-Interactive Detection**: Automatically switches to quiet mode when piped or redirected into files/CI logs.
-
----
-
-## 📦 Quick Installation
-
-### 1. Instant One-Line Install (Recommended)
-Automatically detects your architecture, fetches the official release binary (or builds from source), and installs `inlay`:
+To install or update to the latest release:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
 ```
 
-### 2. Manual Source Build
+The script automatically detects the host architecture, fetches the official release binary, validates its SHA-256 checksum, and installs the binary into `~/.local/bin` (or `/usr/local/bin` if privileged).
+
+### Method 2: Pre-Compiled Binary
+
+Standalone release binaries are available directly on the [GitHub Releases](https://github.com/ucmz851/inlay/releases) page:
+
+- **Linux (x86_64 / amd64)**: [`inlay-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/inlay/releases/download/v0.0.1/inlay-v0.0.1-linux-amd64.tar.gz)
+
 ```bash
+tar -xzf inlay-v0.0.1-linux-amd64.tar.gz
+install -m 755 inlay ~/.local/bin/inlay
+```
+
+### Method 3: Build from Source
+
+#### Prerequisites
+- C11-compliant compiler (`gcc` or `clang`)
+- `make`
+- `libcurl` (development headers, HTTP/3 enabled if QUIC support is required)
+- `OpenSSL` (`libcrypto` development headers)
+- Linux kernel 2.6.14+ (for `posix_fallocate`)
+
+```bash
+# Debian / Ubuntu dependencies
+sudo apt install build-essential libcurl4-openssl-dev libssl-dev pkg-config
+
+# Clone and compile
 git clone https://github.com/ucmz851/inlay.git
 cd inlay
-make
+make -j$(nproc)
 make test
 sudo make install
 ```
 
-### 3. Direct Binary Download (v0.0.1)
-Standalone release binaries are available on the [GitHub Releases](https://github.com/ucmz851/inlay/releases) page:
-* 🐧 **Linux (x86_64 / amd64)**: [`inlay-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/inlay/releases/download/v0.0.1/inlay-v0.0.1-linux-amd64.tar.gz)
+---
 
-### 🔄 Updating Inlay
-Keep your `inlay` installation up to date effortlessly:
+## Updating & Maintenance
+
+Inlay provides native self-update and verification capabilities:
 
 ```bash
-# Self-update in-place (queries GitHub Releases, prompts, and upgrades automatically)
-inlay --update
-
-# Or check if a newer release is available without installing
+# Check if a newer version is available without making changes
 inlay --check-update
 
-# Or simply rerun the one-line install script (auto-detects existing install & upgrades)
+# Automatically download, verify, and apply the latest release in-place
+inlay --update
+
+# Or rerun the installation script to upgrade
 curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
 ```
 
-### 🗑️ Uninstalling Inlay
-Since `inlay` is a self-contained, standalone binary with zero background daemons or global system clutter, removal is instantaneous:
+---
+
+## Uninstallation
+
+Inlay is a self-contained executable that operates without background daemons, system services, or global configurations:
 
 ```bash
-# Automated one-line removal (locates and cleanly removes inlay):
+# Automated uninstallation script:
 curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/uninstall.sh | bash
 
-# Or via the install script with --uninstall:
+# Or via the installer script:
 curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash -s -- --uninstall
 
-# Or if built from source repository:
+# Or if built from source:
 sudo make uninstall
 
-# Or manual removal:
-rm -f $(command -v inlay)
+# Or direct removal:
+rm -f "$(command -v inlay)"
 ```
-
-### Build Requirements (for source compilation)
-* A C11-compliant compiler (`gcc` or `clang`)
-* `libcurl` (HTTP/3 support recommended)
-* `OpenSSL` (`libcrypto`)
-* Linux kernel 2.6+ (for `posix_fallocate`)
 
 ---
 
-## 💡 Practical Examples & Recipes
+## Usage & Examples
 
-### 1. Maximize Bandwidth on High-Speed Links
-Download with 16 parallel connections and 1 MB chunk dynamic work-stealing:
+### Basic Downloads
+
 ```bash
-inlay -n 16 -s 1M https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+# Download a file (filename inferred from URL)
+inlay https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+
+# Specify custom destination filename and directory
+inlay -o ubuntu.iso -d ~/Downloads https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
 ```
 
-### 2. Next-Gen HTTP/3 (QUIC) Downloads
-Harness UDP multiplexing with zero head-of-line blocking on lossy Wi-Fi or cellular networks:
+### Concurrency & Segment Tuning
+
 ```bash
+# Download using 16 parallel connections and 1 MB chunk sizing
+inlay -n 16 -s 1M https://example.com/dataset.tar.gz
+
+# Use static range partitioning instead of dynamic work-stealing
+inlay -n 8 --static https://example.com/archive.zip
+
+# Fall back to single-stream sequential download
+inlay --force-single https://example.com/stream.bin
+```
+
+### Resuming Interrupted Downloads
+
+If a transfer is interrupted by network failure or manual termination (`Ctrl+C`), resume it instantly:
+
+```bash
+inlay -c https://example.com/large-archive.tar.gz
+```
+
+### HTTP/3 (QUIC) Downloads
+
+```bash
+# Attempt HTTP/3 with automatic protocol fallback to HTTP/2 and HTTP/1.1
 inlay --http3 https://cloudflare-quic.com/test.iso
+
+# Force HTTP/3 exclusively (requires HTTP/3-capable libcurl)
+inlay --http3-only https://cloudflare-quic.com/test.iso
 ```
 
-### 3. Direct AWS S3 Private Download
-Download directly from private S3 buckets without pre-signed URLs:
+### AWS S3 & Cloudflare R2 Authentication
+
+Inlay automatically signs requests with AWS SigV4 when accessing `s3://` URLs:
+
 ```bash
+# Credentials loaded from standard AWS environment variables:
 export AWS_ACCESS_KEY_ID="AKIA..."
 export AWS_SECRET_ACCESS_KEY="..."
 export AWS_REGION="us-east-1"
 
-inlay s3://my-deeplearning-weights/llama-3-8b.gguf
-```
+inlay s3://my-dataset-bucket/models/weights.bin
 
-### 4. Direct Cloudflare R2 / MinIO Bucket Download
-```bash
+# Direct download from Cloudflare R2 / MinIO / Ceph with custom endpoint:
 inlay --s3-endpoint https://<account_id>.r2.cloudflarestorage.com \
-      --aws-access-key "R2_KEY" \
-      --aws-secret-key "R2_SECRET" \
+      --aws-access-key "R2_ACCESS_KEY" \
+      --aws-secret-key "R2_SECRET_KEY" \
       s3://models/weights.safetensors
 ```
 
-### 5. Automated Cryptographic Integrity Verification
-Validate SHA-256, SHA-512, MD5, SHA-1, or BLAKE2 immediately upon download. `inlay` automatically infers algorithm type if prefix is omitted:
+### Cryptographic Checksum Validation
+
 ```bash
-# Explicit algorithm
+# Explicit algorithm prefix
 inlay -C sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
 
-# Auto-detected by 64-character hex length (SHA-256)
+# Auto-detected by hex digest length (64 hex chars -> SHA-256)
 inlay -C e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
 ```
 
-### 6. Batch URL Queue File (`-i, --input-file`)
-Queue hundreds of URLs from an input file:
+### Batch URL Queue (`-i, --input-file`)
+
 ```bash
 inlay -i urls.txt -d ~/Downloads -n 8
 ```
-`urls.txt` supports comments, blank lines, and optional aria2-style overrides:
+
+Example `urls.txt` syntax:
+
 ```text
 # Distribution images
 https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
   out=ubuntu-24.04.iso
   checksum=sha256:b590e8a71584e27f47492c10b27...
 
-# Cloud assets
+# Cloud storage datasets
 s3://my-datasets/cifar100.bin
-https://example.com/weights.safetensors   custom_weights.safetensors
+https://example.com/weights.safetensors   custom_name.safetensors
 ```
 
-### 7. Bandwidth Throttling & Custom Headers
-Cap downloads to preserve network headroom for other services:
+### Bandwidth Throttling & Custom Headers
+
 ```bash
-inlay -r 15M -H "Authorization: Bearer SECRET_TOKEN" https://api.example.com/data.zip
+# Limit aggregate download bandwidth to 25 MB/s
+inlay -r 25M https://example.com/large-archive.tar.gz
+
+# Pass custom authentication or session headers
+inlay -H "Authorization: Bearer <token>" -H "X-Custom-Header: value" https://api.example.com/export.zip
 ```
 
 ---
 
-## 🛠️ CLI Reference
+## Command-Line Reference
 
 ```
 Usage: inlay [OPTIONS] [<URL>]
-
-High-performance segmented download engine with zero-assembly positional I/O.
 
 Arguments:
   <URL>                      HTTP, HTTPS, or S3 (s3://) resource URL to download
@@ -264,7 +257,7 @@ Protocols & Network:
       --retry-delay <SECS>   Seconds to wait between retries (default: 2)
   -H, --header <HEADER>      Custom HTTP header (repeatable: -H "Authorization: ...")
   -U, --user-agent <STRING>  Custom HTTP User-Agent string
-  -k, --insecure             Allow insecure HTTPS connections (skip TLS certificate check)
+  -k, --insecure             Allow insecure HTTPS connections (skip TLS check)
   -4, --ipv4                 Resolve IPv4 addresses only
   -6, --ipv6                 Resolve IPv6 addresses only
 
@@ -272,16 +265,16 @@ Cloud Storage & AWS SigV4:
       --aws-sigv4 [PARAM]    Enable AWS SigV4 request signing (default: aws:amz:<region>:s3)
       --aws-access-key <KEY> AWS/S3 access key ID (or env AWS_ACCESS_KEY_ID)
       --aws-secret-key <KEY> AWS/S3 secret access key (or env AWS_SECRET_ACCESS_KEY)
-      --aws-region <REGION>  AWS/S3 region (default: us-east-1, auto for Cloudflare R2)
+      --aws-region <REGION>  AWS/S3 region (default: us-east-1)
       --aws-token <TOKEN>    AWS temporary session token (or env AWS_SESSION_TOKEN)
       --s3-endpoint <URL>    Custom S3/R2 endpoint (e.g. Cloudflare R2, MinIO, Ceph)
 
 Display & Logging:
-  -q, --quiet                Suppress live ANSI progress bar and interactive output
-  -v, --verbose              Enable detailed diagnostic and curl debug logs
-      --no-color             Disable ANSI color codes in output
+  -q, --quiet                Suppress live progress indicators and interactive output
+  -v, --verbose              Enable diagnostic transfer logs
+      --no-color             Disable ANSI formatting in output
   -V, --version              Print version information and exit
-  -h, --help                 Print this help screen and exit
+  -h, --help                 Print help documentation and exit
 
 Updates & Maintenance:
       --update               Check for and install latest release from GitHub
@@ -290,48 +283,44 @@ Updates & Maintenance:
 
 ---
 
-## 🧪 Architecture & Test Suite
+## Technical Architecture
 
-Inlay includes a comprehensive test harness validating unit functionality and real-world network concurrency:
+### 1. Positional Storage Subsystem
+Unlike traditional download tools that write parts into separate scratch files and concatenate them sequentially upon completion, Inlay relies on Linux positional file primitives:
+- `posix_fallocate()` allocates disk sectors contiguously prior to initiating worker connections, eliminating extent fragmentation on ext4/XFS filesystems and failing fast if storage capacity is insufficient.
+- Worker threads issue atomic `pwrite(2)` system calls directly against their designated byte offsets into a single shared file descriptor, removing thread-level mutex contention on the file handle.
+
+### 2. Work-Stealing Scheduling
+Connection throughput fluctuates dynamically over TCP/UDP routes. Inlay employs a work-stealing scheduler:
+- The overall byte range is divided into uniform chunks (default: 512 KB).
+- Workers lease runs of contiguous chunks from an atomic queue to preserve sequential disk locality.
+- Once unallocated chunks are depleted, idle workers inspect active peers. If an active connection has fallen behind ("tail latency"), the idle worker bisects the remaining byte range of the slower connection, initiating an independent HTTP Range request to process the upper half concurrently.
+
+### 3. State Persistence & Crash Recovery
+When a download is initialized, Inlay memory-maps (`mmap`) a compact control file (`<output>.inlay`):
+- A header records the target URL, total resource size, chunk size, and file timestamps.
+- A bitfield tracks completion state at chunk-level granularity (1 bit per chunk: a 10 GB transfer requires only ~2.5 KB of metadata).
+- If terminated abruptly, `-c` re-maps the state file and resumes missing chunks without requiring disk re-validation.
+- Upon 100% verified completion, the `.inlay` file is automatically unlinked.
+
+---
+
+## Test Suite
+
+The codebase includes automated unit and integration tests covering positional I/O, bitfield state recovery, dynamic work-stealing, checksum algorithms, S3 URL transformation, batch queues, and AWS SigV4 mock servers:
 
 ```bash
 make test
 ```
 
-```
-==========================================================
-    Inlay Test Suite: Validating Core Engine & Extensions 
-==========================================================
-[1/7] Compiling unit tests...
-[2/7] Running unit tests...
-  [*] test_storage (Positional I/O & fallocate)... [PASS]
-  [*] test_meta (mmap crash recovery & bitfield)... [PASS]
-  [*] test_scheduler (Dynamic work stealing & lagger bisection)... [PASS]
-  [*] test_checksum (OpenSSL EVP digests & verification)... [PASS]
-  [*] test_s3 (S3 URL transformation & SigV4 parameters)... [PASS]
-  [*] test_batch (Input file queue parsing)... [PASS]
-[3/7] Setting up mock HTTP server with Range and SigV4 support...
-[4/7] Executing Core Engine Integration Tests...
-  --- Test A: Single Stream Download [PASS]
-  --- Test B: Static Multi-Worker Concurrency (4 workers, --static) [PASS]
-  --- Test C: Dynamic Work-Stealing Allocator (8 workers, 256K chunks) [PASS]
-  --- Test D: Interruption, Pause & Crash Recovery Resume [PASS]
-[5/7] Executing Checksum Validation Integration Tests...
-  --- Test E1: Successful SHA-256 Checksum Validation [PASS]
-  --- Test E2: Checksum Mismatch Detection [PASS]
-[6/7] Executing Batch URL Queue Integration Tests...
-  --- Test F: Batch Download via Input File (-i) [PASS]
-[7/7] Executing AWS SigV4 & HTTP/3 Integration Tests...
-  --- Test G: AWS SigV4 Request Authentication [PASS]
-  --- Test H: HTTP/3 (QUIC) Flag Configuration [PASS]
+---
 
-==========================================================
-    ALL INLAY TESTS PASSED SUCCESSFULLY! (100% GREEN)     
-==========================================================
-```
+## Author
+
+Crafted by **Usama Imran Cheema** ([@ucmz851](https://github.com/ucmz851)).
 
 ---
 
-## 📜 License
+## License
 
-Inlay is distributed under the permissive [MIT License](LICENSE). Contributions, bug reports, and feature suggestions are welcome!
+This project is licensed under the terms of the [MIT License](LICENSE).
