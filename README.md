@@ -103,6 +103,50 @@ curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bas
 
 ---
 
+## Configuration
+
+Inlay supports persistent configuration files so default flags, concurrency limits, directories, and protocol preferences do not need to be specified on every invocation.
+
+### Discovery Locations
+
+Inlay automatically searches for configuration files in the following order:
+1. `--config <path>` (explicit command-line path)
+2. `$XDG_CONFIG_HOME/inlay/config` (or `~/.config/inlay/config`)
+3. `~/.inlayrc`
+4. `/etc/inlay/config` (system-wide defaults)
+
+To bypass all configuration files for an isolated transfer, pass `--no-config`.
+
+### Example Configuration (`~/.config/inlay/config`)
+
+```ini
+# Concurrency & Chunk Sizing
+connections = 8
+chunk-size = 1M
+
+# Destination Directory (supports ~ expansion)
+dir = ~/Downloads
+
+# Network & Protocols
+http3 = true
+timeout = 45
+retry = 3
+rate-limit = 50M
+
+# Cloud Storage Defaults
+aws-region = us-east-1
+# s3-endpoint = https://<account_id>.r2.cloudflarestorage.com
+
+# Display
+# no-color = false
+```
+
+### Precedence Hierarchy
+Command-line flags always take highest precedence, overriding both environment variables and configuration file settings:  
+`CLI Flags` > `Environment Variables` > `User Config File` > `Hardcoded Defaults`
+
+---
+
 ## Uninstallation
 
 Inlay is a self-contained executable that operates without background daemons, system services, or global configurations:

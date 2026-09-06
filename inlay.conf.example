@@ -1,0 +1,42 @@
+# ==============================================================================
+# Inlay Configuration File Example
+# Place at ~/.config/inlay/config or ~/.inlayrc or specify with --config <path>
+# ==============================================================================
+
+# Concurrency & Chunk Sizing
+connections = 8
+chunk-size = 1M
+# static = false
+# force-single = false
+
+# Target & Directory
+# dir = ~/Downloads
+# no-fallocate = false
+
+# Network & Protocols
+http3 = true
+# http3-only = false
+timeout = 30
+retry = 3
+retry-delay = 2
+# rate-limit = 50M
+# user-agent = inlay/0.0.1
+# insecure = false
+# ipv4 = false
+# ipv6 = false
+
+# Custom HTTP Headers (can be repeated)
+# header = Authorization: Bearer YOUR_API_TOKEN
+# header = X-Custom-Header: CustomValue
+
+# Cloud Storage & AWS SigV4
+aws-region = us-east-1
+# aws-access-key = AKIA...
+# aws-secret-key = ...
+# aws-token = ...
+# s3-endpoint = https://<account_id>.r2.cloudflarestorage.com
+
+# Display & Output
+# quiet = false
+# verbose = false
+# no-color = false

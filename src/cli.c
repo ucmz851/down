@@ -2,6 +2,7 @@
 #include "checksum.h"
 #include "s3.h"
 #include "update.h"
+#include "config_file.h"
 #include <getopt.h>
 #include <ctype.h>
 
@@ -132,6 +133,9 @@ void cli_print_usage(const char *prog_name) {
     printf("      --no-color             Disable ANSI color codes in output\n");
     printf("  -V, --version              Print version information and exit\n");
     printf("  -h, --help                 Print this help screen and exit\n\n");
+    printf("Configuration:\n");
+    printf("      --config <FILE>        Load options from specified configuration file\n");
+    printf("      --no-config            Ignore default configuration files\n\n");
     printf("Updates & Maintenance:\n");
     printf("      --update               Check for and install latest release from GitHub\n");
     printf("      --check-update         Check if a newer version is available without installing\n\n");
@@ -148,6 +152,7 @@ void cli_print_usage(const char *prog_name) {
 
 int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
     if (!config) return -1;
+    optind = 1;
     memset(config, 0, sizeof(*config));
     config->num_workers = DEFAULT_NUM_WORKERS;
     config->chunk_size = DEFAULT_CHUNK_SIZE;
@@ -167,6 +172,29 @@ int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
     config->http_version = 0;
     config->aws_sigv4_enabled = false;
 
+    /* Pre-scan for --no-config and --config / --conf-path before getopt_long */
+    bool no_config = false;
+    const char *explicit_config = NULL;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--no-config") == 0) {
+            no_config = true;
+        } else if (strcmp(argv[i], "--config") == 0 || strcmp(argv[i], "--conf-path") == 0) {
+            if (i + 1 < argc) {
+                explicit_config = argv[++i];
+            }
+        } else if (strncmp(argv[i], "--config=", 9) == 0) {
+            explicit_config = argv[i] + 9;
+        } else if (strncmp(argv[i], "--conf-path=", 12) == 0) {
+            explicit_config = argv[i] + 12;
+        }
+    }
+
+    if (!no_config) {
+        if (config_file_load(config, explicit_config) != 0) {
+            return -1;
+        }
+    }
+
     static struct option long_options[] = {
         {"output",        required_argument, 0, 'o'},
         {"dir",           required_argument, 0, 'd'},
@@ -182,6 +210,9 @@ int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
         {"ipv6",          no_argument,       0, '6'},
         {"input-file",    required_argument, 0, 'i'},
         {"checksum",      required_argument, 0, 'C'},
+        {"config",        required_argument, 0, 1032},
+        {"conf-path",     required_argument, 0, 1032},
+        {"no-config",     no_argument,       0, 1033},
         {"http3",         no_argument,       0, 1010},
         {"http3-only",    no_argument,       0, 1011},
         {"aws-sigv4",     optional_argument, 0, 1020},
@@ -341,6 +372,9 @@ int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
                 break;
             case 'v':
                 config->verbose = true;
+                break;
+            case 1032: /* --config / --conf-path (pre-scanned) */
+            case 1033: /* --no-config (pre-scanned) */
                 break;
             case 1030: /* --update */ {
                 int res = update_check_and_apply(true);
