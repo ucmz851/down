@@ -32,7 +32,7 @@ echo -e "${BOLD}High-Performance Segmented Download Engine${RESET}"
 echo -e "${DIM}https://github.com/${REPO}${RESET}\n"
 
 # 1. Detect latest version from GitHub API (with fallback)
-LATEST_TAG="$(curl -fsSL --connect-timeout 5 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || true)"
+LATEST_TAG="$(curl -fsSL --connect-timeout 5 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d '"' -f 4 || true)"
 if [ -n "$LATEST_TAG" ]; then
     VERSION="${LATEST_TAG#v}"
 else
