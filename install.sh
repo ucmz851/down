@@ -58,9 +58,12 @@ case "$ARCH" in
 esac
 
 # 3. Determine Installation Directory
-if [ -w "$DEFAULT_INSTALL_DIR" ]; then
+if [ -n "${INSTALL_DIR:-}" ]; then
+    TARGET_DIR="$INSTALL_DIR"
+    mkdir -p "$TARGET_DIR"
+elif [ -w "$DEFAULT_INSTALL_DIR" ] || [ "$(id -u)" -eq 0 ]; then
     TARGET_DIR="$DEFAULT_INSTALL_DIR"
-elif command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
+elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
     TARGET_DIR="$DEFAULT_INSTALL_DIR"
     USE_SUDO="sudo"
 else
