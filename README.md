@@ -139,6 +139,23 @@ inlay --check-update
 curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
 ```
 
+### 🗑️ Uninstalling Inlay
+Since `inlay` is a self-contained, standalone binary with zero background daemons or global system clutter, removal is instantaneous:
+
+```bash
+# Automated one-line removal (locates and cleanly removes inlay):
+curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/uninstall.sh | bash
+
+# Or via the install script with --uninstall:
+curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash -s -- --uninstall
+
+# Or if built from source repository:
+sudo make uninstall
+
+# Or manual removal:
+rm -f $(command -v inlay)
+```
+
 ### Build Requirements (for source compilation)
 * A C11-compliant compiler (`gcc` or `clang`)
 * `libcurl` (HTTP/3 support recommended)

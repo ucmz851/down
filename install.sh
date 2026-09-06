@@ -31,6 +31,45 @@ EOF
 echo -e "${BOLD}High-Performance Segmented Download Engine${RESET}"
 echo -e "${DIM}https://github.com/${REPO}${RESET}\n"
 
+# Handle --uninstall flag
+if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
+    echo -e "${BOLD}Uninstalling Inlay...${RESET}\n"
+    CANDIDATES=(
+        "$(command -v inlay 2>/dev/null || true)"
+        "/usr/local/bin/inlay"
+        "${HOME}/.local/bin/inlay"
+        "/usr/bin/inlay"
+    )
+    REMOVED=0
+    declare -A SEEN
+    for target in "${CANDIDATES[@]}"; do
+        [ -z "$target" ] && continue
+        [ -n "${SEEN[$target]:-}" ] && continue
+        SEEN["$target"]=1
+        if [ -f "$target" ] || [ -L "$target" ]; then
+            echo -e "[*] Found Inlay at: ${BOLD}${target}${RESET}"
+            if [ -w "$target" ] || [ -w "$(dirname "$target")" ]; then
+                rm -f "$target"
+                echo -e "${GREEN}[✓] Removed ${target}${RESET}"
+                REMOVED=$((REMOVED + 1))
+            elif command -v sudo >/dev/null 2>&1; then
+                echo -e "[*] Root privileges required to remove ${target}..."
+                sudo rm -f "$target"
+                echo -e "${GREEN}[✓] Removed ${target} (via sudo)${RESET}"
+                REMOVED=$((REMOVED + 1))
+            else
+                echo -e "${RED}[!] Cannot remove ${target}: permission denied.${RESET}"
+            fi
+        fi
+    done
+    if [ "$REMOVED" -gt 0 ]; then
+        echo -e "\n${GREEN}${BOLD}[✓] Inlay has been completely removed from your system.${RESET}\n"
+    else
+        echo -e "${YELLOW}[*] No active Inlay installations were found on your system.${RESET}\n"
+    fi
+    exit 0
+fi
+
 # 1. Detect latest version from GitHub releases redirect or API
 LATEST_TAG="$(curl -sIL -o /dev/null -w "%{url_effective}\n" "https://github.com/${REPO}/releases/latest" 2>/dev/null | awk -F'/' '{print $NF}' || true)"
 if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "latest" ]; then

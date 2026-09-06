@@ -14,7 +14,9 @@ BIN := inlay
 SOURCES := $(wildcard $(SRCDIR)/*.c)
 OBJECTS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
 
-.PHONY: all clean test install
+PREFIX ?= /usr/local
+
+.PHONY: all clean test install uninstall
 
 all: $(BIN)
 
@@ -35,5 +37,8 @@ clean:
 	rm -rf $(BUILDDIR) $(BIN) test_* *.inlay *.out *.tmp
 
 install: $(BIN)
-	install -d $(DESTDIR)/usr/local/bin
-	install -m 755 $(BIN) $(DESTDIR)/usr/local/bin/$(BIN)
+	install -d $(DESTDIR)$(PREFIX)/bin
+	install -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
+
+uninstall:
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
