@@ -13,7 +13,7 @@
 <br/>
 
 ```text
-── inlay 1.0.0 ─────────────────────────────────────────────────────────
+── inlay 0.0.1 ─────────────────────────────────────────────────────────
  Target   : llama-3-70b-instruct.Q4_K_M.gguf
  Size     : 42.60 GB (45741690880 bytes)
  Source   : s3://ai-weights-us/models/llama-3-70b-instruct.Q4_K_M.gguf
@@ -105,27 +105,30 @@ Engineered for precision and aesthetic clarity without terminal flicker:
 
 ## 📦 Quick Installation
 
-### Arch Linux / Ubuntu / Debian / Fedora / macOS
+### 1. Instant One-Line Install (Recommended)
+Automatically detects your architecture, fetches the official release binary (or builds from source), and installs `inlay`:
 
 ```bash
-# Clone the repository
+curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
+```
+
+### 2. Manual Source Build
+```bash
 git clone https://github.com/ucmz851/inlay.git
 cd inlay
-
-# Compile with maximum optimization (-O3)
 make
-
-# Run the comprehensive test suite
 make test
-
-# Install to /usr/local/bin
 sudo make install
 ```
 
-### Build Requirements
+### 3. Direct Binary Download (v0.0.1)
+Standalone release binaries are available on the [GitHub Releases](https://github.com/ucmz851/inlay/releases) page:
+* 🐧 **Linux (x86_64 / amd64)**: [`inlay-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/inlay/releases/download/v0.0.1/inlay-v0.0.1-linux-amd64.tar.gz)
+
+### Build Requirements (for source compilation)
 * A C11-compliant compiler (`gcc` or `clang`)
-* `libcurl` (with HTTP/3 support recommended)
-* `OpenSSL` (libcrypto)
+* `libcurl` (HTTP/3 support recommended)
+* `OpenSSL` (`libcrypto`)
 * Linux kernel 2.6+ (for `posix_fallocate`)
 
 ---

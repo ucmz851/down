@@ -24,3 +24,8 @@ test_*
 __pycache__/
 *.pyc
 
+# Release packages
+dist/
+*.tar.gz
+*.sha256
+

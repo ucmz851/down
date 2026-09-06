@@ -21,7 +21,7 @@
 #include <signal.h>
 #include <curl/curl.h>
 
-#define INLAY_VERSION "1.0.0"
+#define INLAY_VERSION "0.0.1"
 #define DEFAULT_NUM_WORKERS 4
 #define MAX_NUM_WORKERS 64
 #define DEFAULT_CHUNK_SIZE (512 * 1024)   /* 512 KB */
