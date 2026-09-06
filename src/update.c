@@ -71,41 +71,74 @@ static int extract_json_field(const char *json, const char *field, char *dest, s
 int update_check_and_apply(bool auto_install) {
     printf("[*] Checking GitHub for updates (current: v%s)...\n", INLAY_VERSION);
 
+    char tag_name[64] = {0};
+    bool tag_found = false;
+
+    /* 1. Try GitHub Releases API */
     CURL *curl = curl_easy_init();
-    if (!curl) {
-        fprintf(stderr, "[!] Error: failed to initialize curl for update check\n");
-        return -1;
-    }
+    if (curl) {
+        memory_buffer_t body = { .data = NULL, .size = 0, .capacity = 0 };
+        struct curl_slist *headers = NULL;
 
-    memory_buffer_t body = { .data = NULL, .size = 0, .capacity = 0 };
+        const char *token = getenv("GITHUB_TOKEN");
+        if (!token) token = getenv("GH_TOKEN");
+        if (token && *token) {
+            char auth_header[256];
+            snprintf(auth_header, sizeof(auth_header), "Authorization: Bearer %s", token);
+            headers = curl_slist_append(headers, auth_header);
+        }
 
-    curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/ucmz851/inlay/releases/latest");
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_write_cb);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
-    curl_easy_setopt(curl, CURLOPT_TIMEOUT, 15L);
+        curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/ucmz851/inlay/releases/latest");
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+        if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_write_cb);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
-    CURLcode res = curl_easy_perform(curl);
-    long http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    curl_easy_cleanup(curl);
+        CURLcode res = curl_easy_perform(curl);
+        long http_code = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
+        curl_easy_cleanup(curl);
+        if (headers) curl_slist_free_all(headers);
 
-    if (res != CURLE_OK || http_code != 200 || !body.data) {
-        fprintf(stderr, "[!] Failed to query GitHub Releases API (HTTP %ld: %s)\n",
-                http_code, curl_easy_strerror(res));
+        if (res == CURLE_OK && http_code == 200 && body.data) {
+            if (extract_json_field(body.data, "tag_name", tag_name, sizeof(tag_name)) == 0) {
+                tag_found = true;
+            }
+        }
         if (body.data) free(body.data);
-        return -1;
     }
 
-    char tag_name[64];
-    if (extract_json_field(body.data, "tag_name", tag_name, sizeof(tag_name)) != 0) {
-        fprintf(stderr, "[!] Error: could not parse release information from GitHub\n");
-        free(body.data);
-        return -1;
+    /* 2. Fallback: Query release redirect URL (bypasses GitHub unauthenticated API rate limits) */
+    if (!tag_found) {
+        CURL *redir_curl = curl_easy_init();
+        if (redir_curl) {
+            curl_easy_setopt(redir_curl, CURLOPT_URL, "https://github.com/ucmz851/inlay/releases/latest");
+            curl_easy_setopt(redir_curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(redir_curl, CURLOPT_NOBODY, 1L);
+            curl_easy_setopt(redir_curl, CURLOPT_TIMEOUT, 10L);
+            curl_easy_setopt(redir_curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+
+            if (curl_easy_perform(redir_curl) == CURLE_OK) {
+                char *eff_url = NULL;
+                curl_easy_getinfo(redir_curl, CURLINFO_EFFECTIVE_URL, &eff_url);
+                if (eff_url) {
+                    const char *tag_slash = strrchr(eff_url, '/');
+                    if (tag_slash && strlen(tag_slash + 1) > 0 && strcmp(tag_slash + 1, "latest") != 0) {
+                        snprintf(tag_name, sizeof(tag_name), "%s", tag_slash + 1);
+                        tag_found = true;
+                    }
+                }
+            }
+            curl_easy_cleanup(redir_curl);
+        }
     }
 
-    free(body.data);
+    if (!tag_found) {
+        fprintf(stderr, "[!] Error: could not query release information from GitHub (rate limit or network error)\n");
+        return -1;
+    }
 
     const char *clean_tag = tag_name;
     if (*clean_tag == 'v' || *clean_tag == 'V') clean_tag++;
@@ -196,27 +229,27 @@ int update_check_and_apply(bool auto_install) {
         return -1;
     }
 
-    curl = curl_easy_init();
-    if (!curl) {
+    CURL *dl_curl = curl_easy_init();
+    if (!dl_curl) {
         fclose(fp);
         unlink(tmp_tar);
         return -1;
     }
 
-    curl_easy_setopt(curl, CURLOPT_URL, download_url);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, fp);
+    curl_easy_setopt(dl_curl, CURLOPT_URL, download_url);
+    curl_easy_setopt(dl_curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(dl_curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+    curl_easy_setopt(dl_curl, CURLOPT_WRITEDATA, fp);
 
-    res = curl_easy_perform(curl);
-    http_code = 0;
-    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
-    curl_easy_cleanup(curl);
+    CURLcode dl_res = curl_easy_perform(dl_curl);
+    long dl_http_code = 0;
+    curl_easy_getinfo(dl_curl, CURLINFO_RESPONSE_CODE, &dl_http_code);
+    curl_easy_cleanup(dl_curl);
     fclose(fp);
 
-    if (res != CURLE_OK || http_code != 200) {
+    if (dl_res != CURLE_OK || dl_http_code != 200) {
         fprintf(stderr, "[!] Failed to download release asset (HTTP %ld: %s)\n",
-                http_code, curl_easy_strerror(res));
+                dl_http_code, curl_easy_strerror(dl_res));
         unlink(tmp_tar);
         rmdir(tmp_extract_dir);
         return -1;

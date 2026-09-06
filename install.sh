@@ -31,8 +31,11 @@ EOF
 echo -e "${BOLD}High-Performance Segmented Download Engine${RESET}"
 echo -e "${DIM}https://github.com/${REPO}${RESET}\n"
 
-# 1. Detect latest version from GitHub API (with fallback)
-LATEST_TAG="$(curl -fsSL --connect-timeout 5 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d '"' -f 4 || true)"
+# 1. Detect latest version from GitHub releases redirect or API
+LATEST_TAG="$(curl -sIL -o /dev/null -w "%{url_effective}\n" "https://github.com/${REPO}/releases/latest" 2>/dev/null | awk -F'/' '{print $NF}' || true)"
+if [ -z "$LATEST_TAG" ] || [ "$LATEST_TAG" = "latest" ]; then
+    LATEST_TAG="$(curl -fsSL --connect-timeout 5 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d '"' -f 4 || true)"
+fi
 if [ -n "$LATEST_TAG" ]; then
     VERSION="${LATEST_TAG#v}"
 else
