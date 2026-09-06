@@ -125,6 +125,20 @@ sudo make install
 Standalone release binaries are available on the [GitHub Releases](https://github.com/ucmz851/inlay/releases) page:
 * 🐧 **Linux (x86_64 / amd64)**: [`inlay-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/inlay/releases/download/v0.0.1/inlay-v0.0.1-linux-amd64.tar.gz)
 
+### 🔄 Updating Inlay
+Keep your `inlay` installation up to date effortlessly:
+
+```bash
+# Self-update in-place (queries GitHub Releases, prompts, and upgrades automatically)
+inlay --update
+
+# Or check if a newer release is available without installing
+inlay --check-update
+
+# Or simply rerun the one-line install script (auto-detects existing install & upgrades)
+curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
+```
+
 ### Build Requirements (for source compilation)
 * A C11-compliant compiler (`gcc` or `clang`)
 * `libcurl` (HTTP/3 support recommended)
@@ -251,6 +265,10 @@ Display & Logging:
       --no-color             Disable ANSI color codes in output
   -V, --version              Print version information and exit
   -h, --help                 Print this help screen and exit
+
+Updates & Maintenance:
+      --update               Check for and install latest release from GitHub
+      --check-update         Check if a newer version is available without installing
 ```
 
 ---

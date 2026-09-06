@@ -6,7 +6,8 @@ build/
 *.tmp
 
 # Test binaries and temporary files
-test_*
+/test_*
+!tests/*.c
 *.bin
 *.iso
 *.img

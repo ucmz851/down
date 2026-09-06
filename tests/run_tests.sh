@@ -16,6 +16,7 @@ gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_sc
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_checksum.c src/checksum.c -o test_checksum -lcrypto
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_s3.c src/s3.c -o test_s3 -lcurl
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_batch.c src/batch.c -o test_batch
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_update.c src/update.c -o test_update -lcurl
 
 echo "[2/7] Running unit tests..."
 echo "  [*] test_storage (Positional I/O & fallocate)..."
@@ -30,6 +31,8 @@ echo "  [*] test_s3 (S3 URL transformation & SigV4 parameters)..."
 ./test_s3
 echo "  [*] test_batch (Input file queue parsing)..."
 ./test_batch
+echo "  [*] test_update (Semantic version comparison & update logic)..."
+./test_update
 
 echo "[3/7] Setting up mock HTTP server with Range and SigV4 support..."
 SERVE_DIR=$(mktemp -d /tmp/inlay_serve_XXXXXX)
@@ -49,7 +52,7 @@ SERVER_PID=$!
 
 cleanup() {
     kill -9 "$SERVER_PID" 2>/dev/null || true
-    rm -rf "$SERVE_DIR" "$WORK_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch
+    rm -rf "$SERVE_DIR" "$WORK_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch test_update
 }
 trap cleanup EXIT
 

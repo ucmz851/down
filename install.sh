@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  inlay: Automated Installer
-#  One-line installation:
+#  inlay: Automated Installer & Updater
+#  One-line installation / update:
 #    curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
 # ==============================================================================
 
 set -euo pipefail
 
 REPO="ucmz851/inlay"
-VERSION="0.0.1"
 DEFAULT_INSTALL_DIR="/usr/local/bin"
 FALLBACK_INSTALL_DIR="${HOME}/.local/bin"
 
@@ -29,10 +28,55 @@ cat << 'EOF'
  |___||_||_||_|\__,_| \_, |
                       |__/ 
 EOF
-echo -e "${BOLD}High-Performance Segmented Download Engine (v${VERSION})${RESET}"
+echo -e "${BOLD}High-Performance Segmented Download Engine${RESET}"
 echo -e "${DIM}https://github.com/${REPO}${RESET}\n"
 
-# 1. Detect Operating System
+# 1. Detect latest version from GitHub API (with fallback)
+LATEST_TAG="$(curl -fsSL --connect-timeout 5 "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null | grep '"tag_name":' | head -n1 | cut -d '"' -f 4 || true)"
+if [ -n "$LATEST_TAG" ]; then
+    VERSION="${LATEST_TAG#v}"
+else
+    VERSION="0.0.1"
+fi
+
+# 2. Check for existing installation
+EXISTING_INLAY="$(command -v inlay 2>/dev/null || true)"
+IS_UPGRADE=0
+
+if [ -n "$EXISTING_INLAY" ] && [ -x "$EXISTING_INLAY" ]; then
+    CURRENT_VER="$("$EXISTING_INLAY" --version 2>/dev/null | head -n1 | awk '{print $2}' || true)"
+    echo -e "[*] Existing installation detected: ${BOLD}v${CURRENT_VER}${RESET} (${EXISTING_INLAY})"
+    IS_UPGRADE=1
+    TARGET_DIR="$(dirname "$EXISTING_INLAY")"
+else
+    # 3. Determine Installation Directory for new installs
+    if [ -n "${INSTALL_DIR:-}" ]; then
+        TARGET_DIR="$INSTALL_DIR"
+        mkdir -p "$TARGET_DIR"
+    elif [ -w "$DEFAULT_INSTALL_DIR" ] || [ "$(id -u)" -eq 0 ]; then
+        TARGET_DIR="$DEFAULT_INSTALL_DIR"
+    elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+        TARGET_DIR="$DEFAULT_INSTALL_DIR"
+        USE_SUDO="sudo"
+    else
+        TARGET_DIR="$FALLBACK_INSTALL_DIR"
+        mkdir -p "$TARGET_DIR"
+    fi
+fi
+
+# Check permissions on target directory
+USE_SUDO=""
+if [ ! -w "$TARGET_DIR" ]; then
+    if command -v sudo >/dev/null 2>&1 && [ -t 0 ]; then
+        USE_SUDO="sudo"
+    else
+        # Fall back to user local bin if cannot write
+        TARGET_DIR="$FALLBACK_INSTALL_DIR"
+        mkdir -p "$TARGET_DIR"
+    fi
+fi
+
+# 4. Detect OS and Architecture
 OS="$(uname -s | tr '[:upper:]' '[:lower:]')"
 ARCH="$(uname -m)"
 
@@ -43,7 +87,6 @@ else
     FORCE_BUILD=0
 fi
 
-# 2. Normalize Architecture
 case "$ARCH" in
     x86_64|amd64)
         NORM_ARCH="amd64"
@@ -57,20 +100,6 @@ case "$ARCH" in
         ;;
 esac
 
-# 3. Determine Installation Directory
-if [ -n "${INSTALL_DIR:-}" ]; then
-    TARGET_DIR="$INSTALL_DIR"
-    mkdir -p "$TARGET_DIR"
-elif [ -w "$DEFAULT_INSTALL_DIR" ] || [ "$(id -u)" -eq 0 ]; then
-    TARGET_DIR="$DEFAULT_INSTALL_DIR"
-elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-    TARGET_DIR="$DEFAULT_INSTALL_DIR"
-    USE_SUDO="sudo"
-else
-    TARGET_DIR="$FALLBACK_INSTALL_DIR"
-    mkdir -p "$TARGET_DIR"
-fi
-
 TMP_DIR="$(mktemp -d /tmp/inlay_install_XXXXXX)"
 cleanup() {
     rm -rf "$TMP_DIR"
@@ -79,18 +108,17 @@ trap cleanup EXIT
 
 INSTALLED=0
 
-# 4. Attempt to Download Pre-compiled Release Binary
+# 5. Download pre-compiled release binary
 if [ "$FORCE_BUILD" -eq 0 ]; then
     TARBALL="inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
     RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
 
-    echo -e "[*] Downloading pre-compiled binary: ${BOLD}${TARBALL}${RESET}..."
+    echo -e "[*] Fetching release asset: ${BOLD}${TARBALL}${RESET} (v${VERSION})..."
     if curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$RELEASE_URL" 2>/dev/null; then
-        echo -e "[*] Extracting ${TARBALL}..."
         tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
 
         if [ -f "${TMP_DIR}/inlay" ]; then
-            echo -e "[*] Installing inlay to ${BOLD}${TARGET_DIR}/inlay${RESET}..."
+            echo -e "[*] Installing inlay into ${BOLD}${TARGET_DIR}/inlay${RESET}..."
             if [ -n "${USE_SUDO:-}" ]; then
                 $USE_SUDO install -m 755 "${TMP_DIR}/inlay" "${TARGET_DIR}/inlay"
             else
@@ -99,16 +127,15 @@ if [ "$FORCE_BUILD" -eq 0 ]; then
             INSTALLED=1
         fi
     else
-        echo -e "${YELLOW}[!] Pre-built binary not found for ${OS}-${NORM_ARCH} on GitHub Releases.${RESET}"
+        echo -e "${YELLOW}[!] Pre-built binary not found on GitHub Releases for ${OS}-${NORM_ARCH}.${RESET}"
         echo -e "[*] Falling back to automated compilation from source..."
     fi
 fi
 
-# 5. Fallback: Build from Source if pre-compiled download failed
+# 6. Fallback: Build from Source
 if [ "$INSTALLED" -eq 0 ]; then
     echo -e "[*] Compiling inlay from source repository..."
 
-    # Check build tools
     for tool in gcc make curl pkg-config; do
         if ! command -v "$tool" >/dev/null 2>&1; then
             echo -e "${RED}[!] Error: '$tool' is required to compile inlay from source.${RESET}"
@@ -117,7 +144,6 @@ if [ "$INSTALLED" -eq 0 ]; then
         fi
     done
 
-    # Check for git
     if command -v git >/dev/null 2>&1; then
         git clone --depth 1 "https://github.com/${REPO}.git" "${TMP_DIR}/source"
     else
@@ -125,7 +151,7 @@ if [ "$INSTALLED" -eq 0 ]; then
         curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 -C "${TMP_DIR}/source"
     fi
 
-    echo -e "[*] Building with make -C ..."
+    echo -e "[*] Building with make..."
     make -C "${TMP_DIR}/source" -j"$(nproc 2>/dev/null || echo 2)"
 
     echo -e "[*] Installing binary to ${BOLD}${TARGET_DIR}/inlay${RESET}..."
@@ -137,9 +163,14 @@ if [ "$INSTALLED" -eq 0 ]; then
     INSTALLED=1
 fi
 
-# 6. Verify Installation
+# 7. Verification & Summary
 if [ "$INSTALLED" -eq 1 ]; then
-    echo -e "\n${GREEN}${BOLD}[✓] Inlay successfully installed!${RESET}"
+    if [ "$IS_UPGRADE" -eq 1 ]; then
+        echo -e "\n${GREEN}${BOLD}[✓] Inlay successfully updated to v${VERSION}!${RESET}"
+    else
+        echo -e "\n${GREEN}${BOLD}[✓] Inlay successfully installed (v${VERSION})!${RESET}"
+    fi
+
     "${TARGET_DIR}/inlay" --version
 
     # Check PATH

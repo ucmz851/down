@@ -1,6 +1,7 @@
 #include "cli.h"
 #include "checksum.h"
 #include "s3.h"
+#include "update.h"
 #include <getopt.h>
 #include <ctype.h>
 
@@ -131,6 +132,9 @@ void cli_print_usage(const char *prog_name) {
     printf("      --no-color             Disable ANSI color codes in output\n");
     printf("  -V, --version              Print version information and exit\n");
     printf("  -h, --help                 Print this help screen and exit\n\n");
+    printf("Updates & Maintenance:\n");
+    printf("      --update               Check for and install latest release from GitHub\n");
+    printf("      --check-update         Check if a newer version is available without installing\n\n");
     printf("Examples:\n");
     printf("  # Download with 8 parallel connections and SHA-256 validation:\n");
     printf("  %s -n 8 -s 1M -C sha256:abcd... https://releases.ubuntu.com/noble/ubuntu-24.04.iso\n\n", prog_name);
@@ -195,6 +199,8 @@ int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
         {"no-color",      no_argument,       0, 1006},
         {"quiet",         no_argument,       0, 'q'},
         {"verbose",       no_argument,       0, 'v'},
+        {"update",        no_argument,       0, 1030},
+        {"check-update",  no_argument,       0, 1031},
         {"version",       no_argument,       0, 'V'},
         {"help",          no_argument,       0, 'h'},
         {0, 0, 0, 0}
@@ -336,6 +342,14 @@ int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
             case 'v':
                 config->verbose = true;
                 break;
+            case 1030: /* --update */ {
+                int res = update_check_and_apply(true);
+                exit(res == 0 ? 0 : 1);
+            }
+            case 1031: /* --check-update */ {
+                int res = update_check_and_apply(false);
+                exit(res == 0 || res == 1 ? 0 : 1);
+            }
             case 'V':
                 cli_print_version();
                 exit(0);
