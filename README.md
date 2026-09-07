@@ -494,6 +494,16 @@ curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | ba
 
 ---
 
+## 🙏 Acknowledgments & Credits
+
+**down** is built on the shoulders of giants in the open-source community. Sincere thanks and appreciation to:
+
+- **[curl / libcurl](https://curl.se/)** (Daniel Stenberg & contributors) — For the world-class, battle-tested network transfer foundation powering down's HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) multiplexing.
+- **[OpenSSL](https://www.openssl.org/)** (The OpenSSL Project) — For the robust cryptographic engine powering real-time checksum verification (SHA-256, SHA-512, MD5, SHA-1, BLAKE2) and AWS SigV4 HMAC-SHA256 request signing.
+- **The Linux Kernel & POSIX Community** — For providing the rock-solid positional I/O primitives (`posix_fallocate`, `pwrite`, `mmap`, `msync`) that make zero-copy lockless segmented downloads possible.
+
+---
+
 ## 👤 Author
 
 Crafted by **Usama Imran Cheema** ([@ucmz851](https://github.com/ucmz851)).
