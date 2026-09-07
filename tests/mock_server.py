@@ -6,8 +6,22 @@ for testing down download manager.
 import sys
 import os
 import re
+import socketserver
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+class FastThreadingHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+    def server_bind(self):
+        # Override to prevent socket.getfqdn() reverse DNS hangs on macOS Darwin
+        socketserver.TCPServer.server_bind(self)
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
+
 class RangeHTTPRequestHandler(BaseHTTPRequestHandler):
+    def address_string(self):
+        # Prevent slow reverse DNS resolution on macOS
+        return self.client_address[0]
     def check_auth(self):
         if self.path.startswith("/secure/"):
             auth = self.headers.get("Authorization")
@@ -119,7 +133,7 @@ def main():
     if hasattr(sys.stderr, 'reconfigure'):
         sys.stderr.reconfigure(line_buffering=True)
 
-    server = ThreadingHTTPServer(("127.0.0.1", port), RangeHTTPRequestHandler)
+    server = FastThreadingHTTPServer(("127.0.0.1", port), RangeHTTPRequestHandler)
     server.serve_dir = serve_dir
     actual_port = server.server_port
     print(f"READY {actual_port}", flush=True)
