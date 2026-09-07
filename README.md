@@ -1,10 +1,20 @@
-# down
+<p align="center">
+  <img src="assets/down.png" alt="down logo" width="128" height="128" />
+</p>
 
-[![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/ucmz851/down?style=flat-square&color=green)](https://github.com/ucmz851/down/releases/latest)
-[![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
-[![Binary Size](https://img.shields.io/badge/Binary-~120%20KB-blueviolet.svg?style=flat-square)](#installation)
+<h1 align="center">down</h1>
+
+<p align="center">
+  <strong>High-performance streaming multi-connection download accelerator in C</strong>
+</p>
+
+<p align="center">
+  <a href="https://en.wikipedia.org/wiki/C11_(C_standard_revision)"><img src="https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c" alt="Language: C11" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT" /></a>
+  <a href="https://github.com/ucmz851/down/releases/latest"><img src="https://img.shields.io/github/v/release/ucmz851/down?style=flat-square&color=green" alt="Release" /></a>
+  <a href="#test-suite"><img src="https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square" alt="Tests" /></a>
+  <a href="#installation"><img src="https://img.shields.io/badge/Binary-~120%20KB-blueviolet.svg?style=flat-square" alt="Binary Size" /></a>
+</p>
 
 **down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux and macOS (Darwin / Apple Silicon & Intel). Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
 
