@@ -32,7 +32,7 @@ int make_directory_recursive(const char *dir_path) {
     return 0;
 }
 
-void config_cleanup(inlay_config_t *config) {
+void config_cleanup(down_config_t *config) {
     if (!config) return;
     if (config->custom_headers) {
         curl_slist_free_all(config->custom_headers);
@@ -82,7 +82,7 @@ uint64_t parse_speed_string(const char *str) {
 }
 
 void cli_print_version(void) {
-    printf("inlay %s (High-Performance Segmented Download Engine)\n", INLAY_VERSION);
+    printf("down %s (High-Performance Segmented Download Engine)\n", DOWN_VERSION);
     printf("Features: fallocate, lockless pwrite, dynamic work-stealing, mmap crash recovery\n");
     printf("Network : libcurl %s (HTTP/3 QUIC supported)\n", curl_version());
     printf("Crypto  : OpenSSL EVP (SHA-256, SHA-512, MD5, SHA-1, BLAKE2)\n");
@@ -98,7 +98,7 @@ void cli_print_usage(const char *prog_name) {
     printf("  -o, --output <PATH>        Destination file name or path (default: auto-detected)\n");
     printf("  -d, --dir <DIRECTORY>      Destination folder (auto-created if nonexistent)\n");
     printf("  -i, --input-file <FILE>    Batch download: read list of URLs from file\n");
-    printf("  -c, --continue             Resume interrupted download from .inlay control file\n");
+    printf("  -c, --continue             Resume interrupted download from .down control file\n");
     printf("  -C, --checksum <SPEC>      Verify hash after download (<algo>:<hex> or raw hex)\n");
     printf("      --no-fallocate         Disable upfront contiguous disk block pre-allocation\n\n");
     printf("Concurrency & Performance:\n");
@@ -150,7 +150,7 @@ void cli_print_usage(const char *prog_name) {
     printf("  %s -i urls.txt -d ~/Downloads -n 8\n", prog_name);
 }
 
-int cli_parse_args(int argc, char **argv, inlay_config_t *config) {
+int cli_parse_args(int argc, char **argv, down_config_t *config) {
     if (!config) return -1;
     optind = 1;
     memset(config, 0, sizeof(*config));

@@ -25,7 +25,7 @@ int main(void) {
     assert(strcmp(key, "2026/backup.tar.gz") == 0);
 
     /* 3. URL transformation: Standard S3 */
-    inlay_config_t config;
+    down_config_t config;
     memset(&config, 0, sizeof(config));
     snprintf(config.url, sizeof(config.url), "s3://prod-backup/database.dump");
     snprintf(config.aws_region, sizeof(config.aws_region), "us-east-1");

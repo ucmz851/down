@@ -4,7 +4,7 @@
 #include <strings.h>
 
 typedef struct {
-    inlay_probe_t *res;
+    down_probe_t *res;
     bool seen_content_range;
 } header_parser_state_t;
 
@@ -62,7 +62,7 @@ static void parse_content_disposition(const char *val, char *dest, size_t dest_s
 static size_t header_callback(char *buffer, size_t size, size_t nitems, void *userdata) {
     size_t total = size * nitems;
     header_parser_state_t *state = (header_parser_state_t *)userdata;
-    inlay_probe_t *res = state->res;
+    down_probe_t *res = state->res;
 
     char line[1024];
     size_t copy_len = total < sizeof(line) - 1 ? total : sizeof(line) - 1;
@@ -83,65 +83,51 @@ static size_t header_callback(char *buffer, size_t size, size_t nitems, void *us
     } else if (strcasecmp(key, "Content-Length") == 0) {
         char *endptr = NULL;
         unsigned long long len = strtoull(val, &endptr, 10);
-        if (endptr != val && len > 0) {
+        if (endptr != val) {
             res->content_length = (uint64_t)len;
             res->length_known = true;
         }
     } else if (strcasecmp(key, "Content-Range") == 0) {
-        /* Format: bytes 0-0/1234567 or bytes 0-0/asterisk */
+        /* Format: bytes 0-0/12345 or bytes */
+        state->seen_content_range = true;
+        res->supports_range = true;
         char *slash = strchr(val, '/');
         if (slash) {
-            slash++;
-            if (*slash != '*') {
-                unsigned long long len = strtoull(slash, NULL, 10);
-                if (len > 0) {
-                    res->content_length = (uint64_t)len;
-                    res->length_known = true;
-                    res->supports_range = true;
-                    state->seen_content_range = true;
-                }
+            char *endptr = NULL;
+            unsigned long long total_sz = strtoull(slash + 1, &endptr, 10);
+            if (endptr != slash + 1 && total_sz > 0) {
+                res->content_length = (uint64_t)total_sz;
+                res->length_known = true;
             }
         }
     } else if (strcasecmp(key, "Content-Disposition") == 0) {
-        if (res->suggested_filename[0] == '\0') {
-            parse_content_disposition(val, res->suggested_filename, sizeof(res->suggested_filename));
-        }
+        parse_content_disposition(val, res->suggested_filename, sizeof(res->suggested_filename));
     }
 
     return total;
 }
 
 void probe_filename_from_url(const char *url, char *dest, size_t dest_size) {
-    dest[0] = '\0';
-    if (!url || !*url) return;
+    if (!url || !dest || dest_size == 0) return;
 
-    /* Strip query string and fragments */
-    const char *q = strchr(url, '?');
-    const char *h = strchr(url, '#');
-    const char *end = url + strlen(url);
-    if (q && q < end) end = q;
-    if (h && h < end) end = h;
+    /* Strip query string */
+    char clean_url[2048];
+    snprintf(clean_url, sizeof(clean_url), "%s", url);
+    char *q = strchr(clean_url, '?');
+    if (q) *q = '\0';
+    char *frag = strchr(clean_url, '#');
+    if (frag) *frag = '\0';
 
-    /* Find last '/' */
-    const char *slash = NULL;
-    for (const char *p = url; p < end; p++) {
-        if (*p == '/') slash = p;
-    }
-
-    if (slash && slash + 1 < end) {
-        size_t len = (size_t)(end - (slash + 1));
-        if (len >= dest_size) len = dest_size - 1;
-        memcpy(dest, slash + 1, len);
-        dest[len] = '\0';
-    }
-
-    /* Fallback if URL ended with a slash or empty */
-    if (dest[0] == '\0') {
+    /* Find last slash */
+    char *slash = strrchr(clean_url, '/');
+    if (slash && *(slash + 1) != '\0') {
+        snprintf(dest, dest_size, "%s", slash + 1);
+    } else {
         snprintf(dest, dest_size, "download.out");
     }
 }
 
-int probe_url(const inlay_config_t *config, inlay_probe_t *probe_res) {
+int probe_url(const down_config_t *config, down_probe_t *probe_res) {
     if (!config || !probe_res) return -1;
     memset(probe_res, 0, sizeof(*probe_res));
 
@@ -161,7 +147,7 @@ int probe_url(const inlay_config_t *config, inlay_probe_t *probe_res) {
     curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
     curl_easy_setopt(curl, CURLOPT_HEADERDATA, &state);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, config->timeout_sec > 0 ? config->timeout_sec : DEFAULT_TIMEOUT_SECS);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("inlay/" INLAY_VERSION));
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("down/" DOWN_VERSION));
     if (config->custom_headers) {
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, config->custom_headers);
     }
@@ -210,7 +196,7 @@ int probe_url(const inlay_config_t *config, inlay_probe_t *probe_res) {
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, header_callback);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, &state);
         curl_easy_setopt(curl, CURLOPT_TIMEOUT, config->timeout_sec > 0 ? config->timeout_sec : DEFAULT_TIMEOUT_SECS);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("inlay/" INLAY_VERSION));
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("down/" DOWN_VERSION));
         if (config->custom_headers) {
             curl_easy_setopt(curl, CURLOPT_HTTPHEADER, config->custom_headers);
         }

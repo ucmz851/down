@@ -1,7 +1,7 @@
-#ifndef INLAY_TELEMETRY_H
-#define INLAY_TELEMETRY_H
+#ifndef DOWN_TELEMETRY_H
+#define DOWN_TELEMETRY_H
 
-#include "inlay.h"
+#include "down.h"
 
 typedef struct {
     _Atomic uint64_t total_size;
@@ -13,32 +13,34 @@ typedef struct {
 
     pthread_t thread;
     uint64_t start_time_us;
-} inlay_telemetry_t;
+} down_telemetry_t;
+
+typedef down_telemetry_t inlay_telemetry_t;
 
 /* Initialize telemetry context */
-int telemetry_init(inlay_telemetry_t *telem, uint64_t total_size, uint64_t initial_bytes, bool quiet);
+int telemetry_init(down_telemetry_t *telem, uint64_t total_size, uint64_t initial_bytes, bool quiet);
 
 /* Start background telemetry display thread */
-int telemetry_start(inlay_telemetry_t *telem);
+int telemetry_start(down_telemetry_t *telem);
 
 /* Stop background telemetry thread */
-void telemetry_stop(inlay_telemetry_t *telem);
+void telemetry_stop(down_telemetry_t *telem);
 
 /* Print clean summary card upon completion */
-void telemetry_print_complete(const inlay_telemetry_t *telem, const char *filepath);
+void telemetry_print_complete(const down_telemetry_t *telem, const char *filepath);
 
 /* Print clean summary card upon pause/interruption */
-void telemetry_print_paused(const inlay_telemetry_t *telem, const char *filepath,
+void telemetry_print_paused(const down_telemetry_t *telem, const char *filepath,
                             const char *meta_path, const char *url);
 
 /* Format duration (e.g., 01m 24s or 45s) */
 void format_duration(uint64_t seconds, char *buf, size_t buf_size);
 
 /* Add bytes directly to downloaded counter */
-static inline void telemetry_add_bytes(inlay_telemetry_t *telem, size_t bytes) {
+static inline void telemetry_add_bytes(down_telemetry_t *telem, size_t bytes) {
     if (telem) {
         atomic_fetch_add_explicit(&telem->downloaded_bytes, bytes, memory_order_relaxed);
     }
 }
 
-#endif /* INLAY_TELEMETRY_H */
+#endif /* DOWN_TELEMETRY_H */

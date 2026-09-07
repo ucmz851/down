@@ -1,7 +1,7 @@
-#ifndef INLAY_BATCH_H
-#define INLAY_BATCH_H
+#ifndef DOWN_BATCH_H
+#define DOWN_BATCH_H
 
-#include "inlay.h"
+#include "down.h"
 
 typedef struct {
     char url[2048];
@@ -28,4 +28,4 @@ int batch_load_file(const char *filepath, batch_queue_t *queue);
 /* Free heap allocated memory in queue */
 void batch_queue_free(batch_queue_t *queue);
 
-#endif /* INLAY_BATCH_H */
+#endif /* DOWN_BATCH_H */

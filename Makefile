@@ -9,7 +9,7 @@ LIBS := $(CURL_LIBS) $(CRYPTO_LIBS) -lpthread -lm
 SRCDIR := src
 INCDIR := include
 BUILDDIR := build
-BIN := inlay
+BIN := down
 
 SOURCES := $(wildcard $(SRCDIR)/*.c)
 OBJECTS := $(patsubst $(SRCDIR)/%.c,$(BUILDDIR)/%.o,$(SOURCES))
@@ -34,11 +34,11 @@ test: all
 	@tests/run_tests.sh
 
 clean:
-	rm -rf $(BUILDDIR) $(BIN) test_* *.inlay *.out *.tmp
+	rm -rf $(BUILDDIR) $(BIN) inlay test_* *.down *.inlay *.out *.tmp
 
 install: $(BIN)
 	install -d $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 uninstall:
-	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN)
+	rm -f $(DESTDIR)$(PREFIX)/bin/$(BIN) $(DESTDIR)$(PREFIX)/bin/inlay

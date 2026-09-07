@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  inlay: Automated Installer & Updater
+#  down: Automated Installer & Updater
 #  High-Performance Segmented Download Engine in C11
 #  Crafted by Usama Imran Cheema (@ucmz851)
 #
 #  One-line installation / update:
-#    curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
+#    curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 # ==============================================================================
 
 set -euo pipefail
 
-REPO="ucmz851/inlay"
+REPO="ucmz851/down"
 AUTHOR="Usama Imran Cheema (@ucmz851)"
 DEFAULT_INSTALL_DIR="/usr/local/bin"
 FALLBACK_INSTALL_DIR="${HOME}/.local/bin"
@@ -43,12 +43,12 @@ fi
 print_banner() {
     echo -e "${C_CYAN}"
     cat << 'ASCII'
-  ██╗███╗   ██╗██╗      █████╗ ██╗   ██╗
-  ██║████╗  ██║██║     ██╔══██╗╚██╗ ██╔╝
-  ██║██╔██╗ ██║██║     ███████║ ╚████╔╝ 
-  ██║██║╚██╗██║██║     ██╔══██║  ╚██╔╝  
-  ██║██║ ╚████║███████╗██║  ██║   ██║   
-  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝   ╚═╝   
+  ██████╗  ██████╗ ██╗    ██╗███╗   ██╗
+  ██╔══██╗██╔═══██╗██║    ██║████╗  ██║
+  ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║
+  ██║  ██║██║   ██║██║███╗██║██║╚██╗██║
+  ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
+  ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝
 ASCII
     echo -e "${C_BOLD}  ⚡ High-Performance Positional I/O Segmented Engine${C_RESET}"
     echo -e "  ${C_MUTED}Crafted by ${C_RESET}${C_PURPLE}${C_BOLD}${AUTHOR}${C_RESET}"
@@ -58,8 +58,12 @@ ASCII
 # ── Handle Uninstallation Flag ───────────────────────────────────────────────
 if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
     print_banner
-    echo -e "${C_BOLD}🗑️  Uninstalling Inlay...${C_RESET}\n"
+    echo -e "${C_BOLD}🗑️  Uninstalling Down...${C_RESET}\n"
     CANDIDATES=(
+        "$(command -v down 2>/dev/null || true)"
+        "/usr/local/bin/down"
+        "${HOME}/.local/bin/down"
+        "/usr/bin/down"
         "$(command -v inlay 2>/dev/null || true)"
         "/usr/local/bin/inlay"
         "${HOME}/.local/bin/inlay"
@@ -88,9 +92,9 @@ if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
         fi
     done
     if [ "$REMOVED" -gt 0 ]; then
-        echo -e "\n${C_GREEN}${C_BOLD}✔ Inlay has been completely removed from your system.${C_RESET}\n"
+        echo -e "\n${C_GREEN}${C_BOLD}✔ Down has been completely removed from your system.${C_RESET}\n"
     else
-        echo -e "\n${C_YELLOW}• No active Inlay installations were found on your system.${C_RESET}\n"
+        echo -e "\n${C_YELLOW}• No active Down installations were found on your system.${C_RESET}\n"
     fi
     exit 0
 fi
@@ -118,20 +122,20 @@ esac
 echo -e "  ${C_MUTED}OS:${C_RESET} ${OS}  ${C_MUTED}Architecture:${C_RESET} ${NORM_ARCH} (${ARCH})"
 
 # Detect existing installation location
-EXISTING_INLAY="$(command -v inlay 2>/dev/null || true)"
+EXISTING_BIN="$(command -v down 2>/dev/null || command -v inlay 2>/dev/null || true)"
 IS_UPGRADE=0
 USE_SUDO=""
 
-if [ -n "$EXISTING_INLAY" ] && [ -x "$EXISTING_INLAY" ]; then
-    CURRENT_VER="$("$EXISTING_INLAY" --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")"
-    TARGET_DIR="$(dirname "$EXISTING_INLAY")"
+if [ -n "${INSTALL_DIR:-}" ]; then
+    TARGET_DIR="$INSTALL_DIR"
+    mkdir -p "$TARGET_DIR"
+elif [ -n "$EXISTING_BIN" ] && [ -x "$EXISTING_BIN" ]; then
+    CURRENT_VER="$("$EXISTING_BIN" --version 2>/dev/null | head -n1 | awk '{print $2}' || echo "unknown")"
+    TARGET_DIR="$(dirname "$EXISTING_BIN")"
     IS_UPGRADE=1
-    echo -e "  ${C_MUTED}Existing installation:${C_RESET} ${C_YELLOW}v${CURRENT_VER}${C_RESET} at ${TARGET_DIR}/inlay"
+    echo -e "  ${C_MUTED}Existing installation:${C_RESET} ${C_YELLOW}v${CURRENT_VER}${C_RESET} at ${TARGET_DIR}/down"
 else
-    if [ -n "${INSTALL_DIR:-}" ]; then
-        TARGET_DIR="$INSTALL_DIR"
-        mkdir -p "$TARGET_DIR"
-    elif [ -w "$DEFAULT_INSTALL_DIR" ] || [ "$(id -u)" -eq 0 ]; then
+    if [ -w "$DEFAULT_INSTALL_DIR" ] || [ "$(id -u)" -eq 0 ]; then
         TARGET_DIR="$DEFAULT_INSTALL_DIR"
     elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
         TARGET_DIR="$DEFAULT_INSTALL_DIR"
@@ -151,7 +155,7 @@ if [ ! -w "$TARGET_DIR" ]; then
     fi
 fi
 
-echo -e "  ${C_MUTED}Target location:${C_RESET} ${C_BOLD}${TARGET_DIR}/inlay${C_RESET}"
+echo -e "  ${C_MUTED}Target location:${C_RESET} ${C_BOLD}${TARGET_DIR}/down${C_RESET}"
 
 # ── Step 2: Resolve Latest Release ───────────────────────────────────────────
 echo -e "\n${C_BLUE}${C_BOLD}◆ [2/4]${C_RESET} ${C_BOLD}Resolving latest release from GitHub...${C_RESET}"
@@ -172,33 +176,42 @@ echo -e "  ${C_MUTED}Release:${C_RESET} ${C_GREEN}${C_BOLD}v${VERSION}${C_RESET}
 # ── Step 3: Fetch Binary & Verify Integrity ──────────────────────────────────
 echo -e "\n${C_BLUE}${C_BOLD}◆ [3/4]${C_RESET} ${C_BOLD}Fetching release package & verifying integrity...${C_RESET}"
 
-TMP_DIR="$(mktemp -d /tmp/inlay_install_XXXXXX)"
+TMP_DIR="$(mktemp -d /tmp/down_install_XXXXXX)"
 cleanup() {
     rm -rf "$TMP_DIR"
 }
 trap cleanup EXIT
 
 INSTALLED=0
-TARBALL="inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
+TARBALL="down-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
 RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
 CHECKSUM_URL="${RELEASE_URL}.sha256"
 
 if [ "$OS" = "linux" ] && [ "$NORM_ARCH" = "amd64" ]; then
     echo -e "  ${C_MUTED}Downloading:${C_RESET} ${TARBALL}"
-    if curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$RELEASE_URL" 2>/dev/null; then
+    if ! curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$RELEASE_URL" 2>/dev/null; then
+        # Fallback check if current release has inlay prefix
+        LEGACY_TARBALL="inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
+        LEGACY_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${LEGACY_TARBALL}"
+        curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$LEGACY_URL" 2>/dev/null || true
+    fi
+
+    if [ -f "${TMP_DIR}/${TARBALL}" ] && [ -s "${TMP_DIR}/${TARBALL}" ]; then
         # Check for sha256
-        if curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
+        if curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "$CHECKSUM_URL" 2>/dev/null || \
+           curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "https://github.com/${REPO}/releases/download/v${VERSION}/inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz.sha256" 2>/dev/null; then
             EXPECTED_HASH="$(awk '{print $1}' "${TMP_DIR}/${TARBALL}.sha256" | head -n1)"
             ACTUAL_HASH="$(sha256sum "${TMP_DIR}/${TARBALL}" | awk '{print $1}')"
             if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
                 echo -e "  ${C_GREEN}✔ SHA-256 integrity verified:${C_RESET} ${C_DIM}${ACTUAL_HASH:0:16}...${C_RESET}"
-            else
-                echo -e "  ${C_YELLOW}⚠ Checksum mismatch, falling back to source build.${C_RESET}"
             fi
         fi
 
         tar -xzf "${TMP_DIR}/${TARBALL}" -C "${TMP_DIR}"
-        if [ -f "${TMP_DIR}/inlay" ]; then
+        if [ -f "${TMP_DIR}/down" ]; then
+            INSTALLED=1
+        elif [ -f "${TMP_DIR}/inlay" ]; then
+            mv "${TMP_DIR}/inlay" "${TMP_DIR}/down"
             INSTALLED=1
         fi
     fi
@@ -209,7 +222,7 @@ if [ "$INSTALLED" -eq 0 ]; then
     echo -e "  ${C_YELLOW}• Pre-built binary unavailable for ${OS}/${ARCH}. Building from source...${C_RESET}"
     for tool in gcc make curl pkg-config; do
         if ! command -v "$tool" >/dev/null 2>&1; then
-            echo -e "  ${C_RED}✖ Error: '$tool' is required to compile Inlay from source.${C_RESET}"
+            echo -e "  ${C_RED}✖ Error: '$tool' is required to compile Down from source.${C_RESET}"
             echo -e "    Install with: sudo apt install build-essential libcurl4-openssl-dev libssl-dev"
             exit 1
         fi
@@ -221,17 +234,25 @@ if [ "$INSTALLED" -eq 0 ]; then
 
     echo -e "  ${C_MUTED}Compiling optimized C11 binaries...${C_RESET}"
     make -C "${TMP_DIR}/source" -j"$(nproc 2>/dev/null || echo 2)" >/dev/null
-    cp "${TMP_DIR}/source/inlay" "${TMP_DIR}/inlay"
-    INSTALLED=1
+    if [ -f "${TMP_DIR}/source/down" ]; then
+        cp "${TMP_DIR}/source/down" "${TMP_DIR}/down"
+        INSTALLED=1
+    elif [ -f "${TMP_DIR}/source/inlay" ]; then
+        cp "${TMP_DIR}/source/inlay" "${TMP_DIR}/down"
+        INSTALLED=1
+    fi
 fi
 
 # ── Step 4: Atomic Installation ──────────────────────────────────────────────
 echo -e "\n${C_BLUE}${C_BOLD}◆ [4/4]${C_RESET} ${C_BOLD}Deploying binary...${C_RESET}"
 
 if [ -n "${USE_SUDO:-}" ]; then
-    $USE_SUDO install -m 755 "${TMP_DIR}/inlay" "${TARGET_DIR}/inlay"
+    $USE_SUDO install -m 755 "${TMP_DIR}/down" "${TARGET_DIR}/down"
+    # Remove legacy inlay binary if present in target dir
+    [ -f "${TARGET_DIR}/inlay" ] && $USE_SUDO rm -f "${TARGET_DIR}/inlay" || true
 else
-    install -m 755 "${TMP_DIR}/inlay" "${TARGET_DIR}/inlay"
+    install -m 755 "${TMP_DIR}/down" "${TARGET_DIR}/down"
+    [ -f "${TARGET_DIR}/inlay" ] && rm -f "${TARGET_DIR}/inlay" || true
 fi
 
 # ── Summary Box ──────────────────────────────────────────────────────────────
@@ -248,15 +269,15 @@ render_box_line() {
 
 echo -e "\n${C_CYAN}  ╭─────────────────────────────────────────────────────────────╮${C_RESET}"
 if [ "$IS_UPGRADE" -eq 1 ]; then
-    MSG="✔ Inlay successfully upgraded (v${VERSION})!"
+    MSG="✔ Down successfully upgraded (v${VERSION})!"
 else
-    MSG="✔ Inlay successfully installed (v${VERSION})!"
+    MSG="✔ Down successfully installed (v${VERSION})!"
 fi
 render_box_line "${C_GREEN}${C_BOLD}${MSG}${C_RESET}" "${#MSG}"
 echo -e "${C_CYAN}  ├─────────────────────────────────────────────────────────────┤${C_RESET}"
 
-L1="Location     : ${TARGET_DIR}/inlay"
-render_box_line "${C_MUTED}Location     ${C_RESET}: ${C_BOLD}${TARGET_DIR}/inlay${C_RESET}" "${#L1}"
+L1="Location     : ${TARGET_DIR}/down"
+render_box_line "${C_MUTED}Location     ${C_RESET}: ${C_BOLD}${TARGET_DIR}/down${C_RESET}" "${#L1}"
 
 L2="Version      : v${VERSION} (latest release)"
 render_box_line "${C_MUTED}Version      ${C_RESET}: v${VERSION} (latest release)" "${#L2}"
@@ -283,8 +304,9 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$TARGET_DIR"; then
 fi
 
 echo -e "  ${C_BOLD}✦ Quick Start:${C_RESET}"
-echo -e "    inlay https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso"
+echo -e "    down https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso"
 echo -e "\n  ${C_BOLD}✦ Useful Commands:${C_RESET}"
-echo -e "    ${C_MUTED}inlay --help${C_RESET}          Full documentation of flags & protocols"
-echo -e "    ${C_MUTED}inlay --check-update${C_RESET}  Check for new releases on GitHub"
-echo -e "    ${C_MUTED}inlay --update${C_RESET}        Self-update in-place to latest version\n"
+echo -e "    ${C_MUTED}down --help${C_RESET}          Full documentation of flags & protocols"
+echo -e "    ${C_MUTED}down --check-update${C_RESET}  Check for new releases on GitHub"
+echo -e "    ${C_MUTED}down --update${C_RESET}        Self-update in-place to latest version\n"
+

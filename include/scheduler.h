@@ -1,7 +1,7 @@
-#ifndef INLAY_SCHEDULER_H
-#define INLAY_SCHEDULER_H
+#ifndef DOWN_SCHEDULER_H
+#define DOWN_SCHEDULER_H
 
-#include "inlay.h"
+#include "down.h"
 #include "meta.h"
 
 typedef enum {
@@ -33,7 +33,7 @@ typedef enum {
 } sched_result_t;
 
 typedef struct {
-    inlay_meta_t *meta;
+    down_meta_t *meta;
     uint64_t file_size;
     uint32_t chunk_size;
     uint32_t num_chunks;
@@ -53,29 +53,31 @@ typedef struct {
 
     _Atomic uint32_t remaining_chunks;
     _Atomic bool all_completed;
-} inlay_scheduler_t;
+} down_scheduler_t;
+
+typedef down_scheduler_t inlay_scheduler_t;
 
 /* Initialize scheduler (supports both dynamic work-stealing and static partitioning) */
-int scheduler_init(inlay_scheduler_t *sched, inlay_meta_t *meta,
+int scheduler_init(down_scheduler_t *sched, down_meta_t *meta,
                    uint64_t file_size, uint32_t chunk_size, int num_workers, bool is_static);
 
 /* Claim work: returns assigned byte range [out_start, out_end] */
-sched_result_t scheduler_get_work(inlay_scheduler_t *sched, int worker_id,
+sched_result_t scheduler_get_work(down_scheduler_t *sched, int worker_id,
                                   uint64_t *out_start, uint64_t *out_end);
 
 /* Worker reports current writing offset (used for lagger bisection) */
-void scheduler_update_progress(inlay_scheduler_t *sched, int worker_id, uint64_t current_offset);
+void scheduler_update_progress(down_scheduler_t *sched, int worker_id, uint64_t current_offset);
 
 /* Check if worker's active range was truncated by bisection */
-bool scheduler_should_worker_stop(inlay_scheduler_t *sched, int worker_id, uint64_t current_offset);
+bool scheduler_should_worker_stop(down_scheduler_t *sched, int worker_id, uint64_t current_offset);
 
 /* Mark chunk as completed in scheduler and meta */
-void scheduler_chunk_completed(inlay_scheduler_t *sched, uint32_t chunk_idx);
+void scheduler_chunk_completed(down_scheduler_t *sched, uint32_t chunk_idx);
 
 /* Reclaim incomplete chunk range upon failure */
-void scheduler_reclaim_range(inlay_scheduler_t *sched, int worker_id, uint64_t from_offset, uint64_t to_offset);
+void scheduler_reclaim_range(down_scheduler_t *sched, int worker_id, uint64_t from_offset, uint64_t to_offset);
 
 /* Cleanup scheduler resources */
-void scheduler_destroy(inlay_scheduler_t *sched);
+void scheduler_destroy(down_scheduler_t *sched);
 
-#endif /* INLAY_SCHEDULER_H */
+#endif /* DOWN_SCHEDULER_H */

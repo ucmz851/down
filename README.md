@@ -1,12 +1,12 @@
-# Inlay
+# Down
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/ucmz851/inlay?style=flat-square&color=green)](https://github.com/ucmz851/inlay/releases/latest)
+[![Release](https://img.shields.io/github/v/release/ucmz851/down?style=flat-square&color=green)](https://github.com/ucmz851/down/releases/latest)
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
 [![Binary Size](https://img.shields.io/badge/Binary-~65%20KB-blueviolet.svg?style=flat-square)](#installation)
 
-**Inlay** is a lightweight, high-throughput segmented download accelerator implemented in C11 for Linux systems. Designed for multi-gigabit network saturation and NVMe storage, it combines lockless parallel positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, and instantaneous zero-rehash crash recovery.
+**Down** is a lightweight, high-throughput segmented download accelerator implemented in C11 for Linux systems. Designed for multi-gigabit network saturation and NVMe storage, it combines lockless parallel positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, and instantaneous zero-rehash crash recovery.
 
 ---
 
@@ -16,7 +16,7 @@
 - **Dynamic Work-Stealing Scheduler**: Continuously balances transfer loads across connection pools. When unassigned chunks are exhausted, idle workers dynamically bisect the remaining byte ranges of slower tail connections to eliminate end-of-transfer stalling.
 - **Modern Protocol Transport**: First-class support for HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) multiplexed transport over UDP with automatic protocol negotiation and fallback.
 - **Direct Cloud Object Storage**: Native AWS Signature Version 4 (`AWS4-HMAC-SHA256`) signing for `s3://` URLs, enabling authenticated segmented downloads from Amazon S3, Cloudflare R2, MinIO, and Ceph without requiring external CLIs or SDK runtimes.
-- **Zero-Rehash Crash Recovery**: Transfer state is mirrored in a compact memory-mapped control file (`<filename>.inlay`) backed by atomic bitfields. Interrupted downloads resume immediately with `-c` without re-reading or hashing existing file blocks.
+- **Zero-Rehash Crash Recovery**: Transfer state is mirrored in a compact memory-mapped control file (`<filename>.down`) backed by atomic bitfields. Interrupted downloads resume immediately with `-c` without re-reading or hashing existing file blocks.
 - **Cryptographic Verification**: Automated post-download hash validation supporting SHA-256, SHA-512, MD5, SHA-1, and BLAKE2 with automatic algorithm inference from hex string lengths.
 - **Batch Processing**: Process multi-URL queue files with custom per-item output paths and checksum specifications (`-i, --input-file`).
 - **Minimal Footprint**: Standalone, statically or dynamically linked binary (~65 KB stripped) depending only on standard system libraries (`libcurl`, `OpenSSL`).
@@ -25,7 +25,7 @@
 
 ## Comparison
 
-| Feature | Inlay | aria2c | curl | wget | axel |
+| Feature | Down | aria2c | curl | wget | axel |
 |:---|:---:|:---:|:---:|:---:|:---:|
 | **Language** | **C11** | C++ | C | C | C |
 | **Binary Size** | **~65 KB** | ~4.5 MB | ~3.2 MB | ~1.8 MB | ~130 KB |
@@ -47,20 +47,20 @@
 To install or update to the latest release:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 ```
 
 The script automatically detects the host architecture, fetches the official release binary, validates its SHA-256 checksum, and installs the binary into `~/.local/bin` (or `/usr/local/bin` if privileged).
 
 ### Method 2: Pre-Compiled Binary
 
-Standalone release binaries are available directly on the [GitHub Releases](https://github.com/ucmz851/inlay/releases) page:
+Standalone release binaries are available directly on the [GitHub Releases](https://github.com/ucmz851/down/releases) page:
 
-- **Linux (x86_64 / amd64)**: [`inlay-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/inlay/releases/download/v0.0.1/inlay-v0.0.1-linux-amd64.tar.gz)
+- **Linux (x86_64 / amd64)**: [`down-v0.0.1-linux-amd64.tar.gz`](https://github.com/ucmz851/down/releases/download/v0.0.1/down-v0.0.1-linux-amd64.tar.gz)
 
 ```bash
-tar -xzf inlay-v0.0.1-linux-amd64.tar.gz
-install -m 755 inlay ~/.local/bin/inlay
+tar -xzf down-v0.0.1-linux-amd64.tar.gz
+install -m 755 down ~/.local/bin/down
 ```
 
 ### Method 3: Build from Source
@@ -77,8 +77,8 @@ install -m 755 inlay ~/.local/bin/inlay
 sudo apt install build-essential libcurl4-openssl-dev libssl-dev pkg-config
 
 # Clone and compile
-git clone https://github.com/ucmz851/inlay.git
-cd inlay
+git clone https://github.com/ucmz851/down.git
+cd down
 make -j$(nproc)
 make test
 sudo make install
@@ -88,36 +88,36 @@ sudo make install
 
 ## Updating & Maintenance
 
-Inlay provides native self-update and verification capabilities:
+Down provides native self-update and verification capabilities:
 
 ```bash
 # Check if a newer version is available without making changes
-inlay --check-update
+down --check-update
 
 # Automatically download, verify, and apply the latest release in-place
-inlay --update
+down --update
 
 # Or rerun the installation script to upgrade
-curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 ```
 
 ---
 
 ## Configuration
 
-Inlay supports persistent configuration files so default flags, concurrency limits, directories, and protocol preferences do not need to be specified on every invocation.
+Down supports persistent configuration files so default flags, concurrency limits, directories, and protocol preferences do not need to be specified on every invocation.
 
 ### Discovery Locations
 
-Inlay automatically searches for configuration files in the following order:
+Down automatically searches for configuration files in the following order:
 1. `--config <path>` (explicit command-line path)
-2. `$XDG_CONFIG_HOME/inlay/config` (or `~/.config/inlay/config`)
-3. `~/.inlayrc`
-4. `/etc/inlay/config` (system-wide defaults)
+2. `$XDG_CONFIG_HOME/down/config` (or `~/.config/down/config`)
+3. `~/.downrc`
+4. `/etc/down/config` (system-wide defaults)
 
 To bypass all configuration files for an isolated transfer, pass `--no-config`.
 
-### Example Configuration (`~/.config/inlay/config`)
+### Example Configuration (`~/.config/down/config`)
 
 ```ini
 # Concurrency & Chunk Sizing
@@ -149,20 +149,20 @@ Command-line flags always take highest precedence, overriding both environment v
 
 ## Uninstallation
 
-Inlay is a self-contained executable that operates without background daemons, system services, or global configurations:
+Down is a self-contained executable that operates without background daemons, system services, or global configurations:
 
 ```bash
 # Automated uninstallation script:
-curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | bash
 
 # Or via the installer script:
-curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash -s -- --uninstall
+curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash -s -- --uninstall
 
 # Or if built from source:
 sudo make uninstall
 
 # Or direct removal:
-rm -f "$(command -v inlay)"
+rm -f "$(command -v down)"
 ```
 
 ---
@@ -173,23 +173,23 @@ rm -f "$(command -v inlay)"
 
 ```bash
 # Download a file (filename inferred from URL)
-inlay https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+down https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
 
 # Specify custom destination filename and directory
-inlay -o ubuntu.iso -d ~/Downloads https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+down -o ubuntu.iso -d ~/Downloads https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
 ```
 
 ### Concurrency & Segment Tuning
 
 ```bash
 # Download using 16 parallel connections and 1 MB chunk sizing
-inlay -n 16 -s 1M https://example.com/dataset.tar.gz
+down -n 16 -s 1M https://example.com/dataset.tar.gz
 
 # Use static range partitioning instead of dynamic work-stealing
-inlay -n 8 --static https://example.com/archive.zip
+down -n 8 --static https://example.com/archive.zip
 
 # Fall back to single-stream sequential download
-inlay --force-single https://example.com/stream.bin
+down --force-single https://example.com/stream.bin
 ```
 
 ### Resuming Interrupted Downloads
@@ -197,22 +197,22 @@ inlay --force-single https://example.com/stream.bin
 If a transfer is interrupted by network failure or manual termination (`Ctrl+C`), resume it instantly:
 
 ```bash
-inlay -c https://example.com/large-archive.tar.gz
+down -c https://example.com/large-archive.tar.gz
 ```
 
 ### HTTP/3 (QUIC) Downloads
 
 ```bash
 # Attempt HTTP/3 with automatic protocol fallback to HTTP/2 and HTTP/1.1
-inlay --http3 https://cloudflare-quic.com/test.iso
+down --http3 https://cloudflare-quic.com/test.iso
 
 # Force HTTP/3 exclusively (requires HTTP/3-capable libcurl)
-inlay --http3-only https://cloudflare-quic.com/test.iso
+down --http3-only https://cloudflare-quic.com/test.iso
 ```
 
 ### AWS S3 & Cloudflare R2 Authentication
 
-Inlay automatically signs requests with AWS SigV4 when accessing `s3://` URLs:
+Down automatically signs requests with AWS SigV4 when accessing `s3://` URLs:
 
 ```bash
 # Credentials loaded from standard AWS environment variables:
@@ -220,10 +220,10 @@ export AWS_ACCESS_KEY_ID="AKIA..."
 export AWS_SECRET_ACCESS_KEY="..."
 export AWS_REGION="us-east-1"
 
-inlay s3://my-dataset-bucket/models/weights.bin
+down s3://my-dataset-bucket/models/weights.bin
 
 # Direct download from Cloudflare R2 / MinIO / Ceph with custom endpoint:
-inlay --s3-endpoint https://<account_id>.r2.cloudflarestorage.com \
+down --s3-endpoint https://<account_id>.r2.cloudflarestorage.com \
       --aws-access-key "R2_ACCESS_KEY" \
       --aws-secret-key "R2_SECRET_KEY" \
       s3://models/weights.safetensors
@@ -233,16 +233,16 @@ inlay --s3-endpoint https://<account_id>.r2.cloudflarestorage.com \
 
 ```bash
 # Explicit algorithm prefix
-inlay -C sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
+down -C sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
 
 # Auto-detected by hex digest length (64 hex chars -> SHA-256)
-inlay -C e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
+down -C e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
 ```
 
 ### Batch URL Queue (`-i, --input-file`)
 
 ```bash
-inlay -i urls.txt -d ~/Downloads -n 8
+down -i urls.txt -d ~/Downloads -n 8
 ```
 
 Example `urls.txt` syntax:
@@ -262,10 +262,10 @@ https://example.com/weights.safetensors   custom_name.safetensors
 
 ```bash
 # Limit aggregate download bandwidth to 25 MB/s
-inlay -r 25M https://example.com/large-archive.tar.gz
+down -r 25M https://example.com/large-archive.tar.gz
 
 # Pass custom authentication or session headers
-inlay -H "Authorization: Bearer <token>" -H "X-Custom-Header: value" https://api.example.com/export.zip
+down -H "Authorization: Bearer <token>" -H "X-Custom-Header: value" https://api.example.com/export.zip
 ```
 
 ---
@@ -273,7 +273,7 @@ inlay -H "Authorization: Bearer <token>" -H "X-Custom-Header: value" https://api
 ## Command-Line Reference
 
 ```
-Usage: inlay [OPTIONS] [<URL>]
+Usage: down [OPTIONS] [<URL>]
 
 Arguments:
   <URL>                      HTTP, HTTPS, or S3 (s3://) resource URL to download
@@ -282,7 +282,7 @@ Target & Batch:
   -o, --output <PATH>        Destination file name or path (default: auto-detected)
   -d, --dir <DIRECTORY>      Destination folder (auto-created if nonexistent)
   -i, --input-file <FILE>    Batch download: read list of URLs from file
-  -c, --continue             Resume interrupted download from .inlay control file
+  -c, --continue             Resume interrupted download from .down control file
   -C, --checksum <SPEC>      Verify hash after download (<algo>:<hex> or raw hex)
       --no-fallocate         Disable upfront contiguous disk block pre-allocation
 
@@ -330,22 +330,22 @@ Updates & Maintenance:
 ## Technical Architecture
 
 ### 1. Positional Storage Subsystem
-Unlike traditional download tools that write parts into separate scratch files and concatenate them sequentially upon completion, Inlay relies on Linux positional file primitives:
+Unlike traditional download tools that write parts into separate scratch files and concatenate them sequentially upon completion, Down relies on Linux positional file primitives:
 - `posix_fallocate()` allocates disk sectors contiguously prior to initiating worker connections, eliminating extent fragmentation on ext4/XFS filesystems and failing fast if storage capacity is insufficient.
 - Worker threads issue atomic `pwrite(2)` system calls directly against their designated byte offsets into a single shared file descriptor, removing thread-level mutex contention on the file handle.
 
 ### 2. Work-Stealing Scheduling
-Connection throughput fluctuates dynamically over TCP/UDP routes. Inlay employs a work-stealing scheduler:
+Connection throughput fluctuates dynamically over TCP/UDP routes. Down employs a work-stealing scheduler:
 - The overall byte range is divided into uniform chunks (default: 512 KB).
 - Workers lease runs of contiguous chunks from an atomic queue to preserve sequential disk locality.
 - Once unallocated chunks are depleted, idle workers inspect active peers. If an active connection has fallen behind ("tail latency"), the idle worker bisects the remaining byte range of the slower connection, initiating an independent HTTP Range request to process the upper half concurrently.
 
 ### 3. State Persistence & Crash Recovery
-When a download is initialized, Inlay memory-maps (`mmap`) a compact control file (`<output>.inlay`):
+When a download is initialized, Down memory-maps (`mmap`) a compact control file (`<output>.down`):
 - A header records the target URL, total resource size, chunk size, and file timestamps.
 - A bitfield tracks completion state at chunk-level granularity (1 bit per chunk: a 10 GB transfer requires only ~2.5 KB of metadata).
 - If terminated abruptly, `-c` re-maps the state file and resumes missing chunks without requiring disk re-validation.
-- Upon 100% verified completion, the `.inlay` file is automatically unlinked.
+- Upon 100% verified completion, the `.down` file is automatically unlinked.
 
 ---
 

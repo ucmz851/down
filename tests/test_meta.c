@@ -16,7 +16,7 @@
 #define NUM_CHUNKS 20
 
 typedef struct {
-    inlay_meta_t *meta;
+    down_meta_t *meta;
     int thread_id;
 } meta_thread_arg_t;
 
@@ -35,11 +35,11 @@ int main(void) {
     printf("[*] Running test_meta...\n");
 
     const char *url = "http://example.com/test_archive.iso";
-    inlay_meta_t meta;
+    down_meta_t meta;
 
     /* Clean any leftover */
     char meta_path[1024];
-    snprintf(meta_path, sizeof(meta_path), "%s%s", TEST_META_TARGET, INLAY_META_EXT);
+    snprintf(meta_path, sizeof(meta_path), "%s%s", TEST_META_TARGET, DOWN_META_EXT);
     unlink(meta_path);
 
     int ret = meta_open(&meta, TEST_META_TARGET, url, FILE_SIZE, CHUNK_SIZE, false);
@@ -73,7 +73,7 @@ int main(void) {
     meta_close(&meta);
 
     /* Re-open in resume mode and verify instant crash recovery without re-download */
-    inlay_meta_t resumed_meta;
+    down_meta_t resumed_meta;
     ret = meta_open(&resumed_meta, TEST_META_TARGET, url, FILE_SIZE, CHUNK_SIZE, true);
     assert(ret == 0);
     assert(resumed_meta.is_resumed == true);

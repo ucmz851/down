@@ -1,6 +1,6 @@
 #include "storage.h"
 
-int storage_init(inlay_storage_t *storage, const char *filepath, uint64_t total_size, bool no_fallocate, bool resume) {
+int storage_init(down_storage_t *storage, const char *filepath, uint64_t total_size, bool no_fallocate, bool resume) {
     if (!storage || !filepath) return -1;
 
     memset(storage, 0, sizeof(*storage));
@@ -97,7 +97,7 @@ int storage_pread_all(int fd, void *buf, size_t count, off_t offset) {
     return (read_bytes == count) ? 0 : -1;
 }
 
-int storage_sync(inlay_storage_t *storage) {
+int storage_sync(down_storage_t *storage) {
     if (!storage || storage->fd < 0) return -1;
 #if defined(_POSIX_SYNCHRONIZED_IO) && (_POSIX_SYNCHRONIZED_IO > 0)
     return fdatasync(storage->fd);
@@ -106,7 +106,7 @@ int storage_sync(inlay_storage_t *storage) {
 #endif
 }
 
-void storage_close(inlay_storage_t *storage) {
+void storage_close(down_storage_t *storage) {
     if (storage && storage->fd >= 0) {
         storage_sync(storage);
         close(storage->fd);

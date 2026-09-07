@@ -42,7 +42,7 @@ static void *thread_writer(void *arg) {
 int main(void) {
     printf("[*] Running test_storage...\n");
 
-    inlay_storage_t storage;
+    down_storage_t storage;
     int ret = storage_init(&storage, TEST_FILE, FILE_SIZE, false, false);
     assert(ret == 0);
     assert(storage.fd >= 0);

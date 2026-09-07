@@ -1,7 +1,7 @@
-#ifndef INLAY_CHECKSUM_H
-#define INLAY_CHECKSUM_H
+#ifndef DOWN_CHECKSUM_H
+#define DOWN_CHECKSUM_H
 
-#include "inlay.h"
+#include "down.h"
 
 /* Parse a checksum specification such as "sha256:<hex>" or raw hex.
  * Auto-detects algorithm by length if prefix is omitted:
@@ -28,4 +28,4 @@ int checksum_verify_file(const char *file_path, const char *algo,
                          const char *expected_hex,
                          char *actual_hex_out, size_t actual_hex_sz);
 
-#endif /* INLAY_CHECKSUM_H */
+#endif /* DOWN_CHECKSUM_H */

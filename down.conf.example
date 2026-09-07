@@ -1,6 +1,6 @@
 # ==============================================================================
-# Inlay Configuration File Example
-# Place at ~/.config/inlay/config or ~/.inlayrc or specify with --config <path>
+# Down Configuration File Example
+# Place at ~/.config/down/config or ~/.downrc or specify with --config <path>
 # ==============================================================================
 
 # Concurrency & Chunk Sizing
@@ -20,7 +20,7 @@ timeout = 30
 retry = 3
 retry-delay = 2
 # rate-limit = 50M
-# user-agent = inlay/0.0.1
+# user-agent = down/0.0.1
 # insecure = false
 # ipv4 = false
 # ipv6 = false

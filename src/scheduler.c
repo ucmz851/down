@@ -3,7 +3,7 @@
 
 #define CHUNKS_PER_CLAIM 4
 
-int scheduler_init(inlay_scheduler_t *sched, inlay_meta_t *meta,
+int scheduler_init(down_scheduler_t *sched, down_meta_t *meta,
                    uint64_t file_size, uint32_t chunk_size, int num_workers, bool is_static) {
     if (!sched || !meta || file_size == 0 || chunk_size == 0 || num_workers <= 0) return -1;
     memset(sched, 0, sizeof(*sched));
@@ -58,7 +58,7 @@ int scheduler_init(inlay_scheduler_t *sched, inlay_meta_t *meta,
     return 0;
 }
 
-sched_result_t scheduler_get_work(inlay_scheduler_t *sched, int worker_id,
+sched_result_t scheduler_get_work(down_scheduler_t *sched, int worker_id,
                                   uint64_t *out_start, uint64_t *out_end) {
     if (!sched || worker_id < 0 || worker_id >= sched->num_workers) return SCHED_WORK_DONE;
 
@@ -248,12 +248,12 @@ sched_result_t scheduler_get_work(inlay_scheduler_t *sched, int worker_id,
     }
 }
 
-void scheduler_update_progress(inlay_scheduler_t *sched, int worker_id, uint64_t current_offset) {
+void scheduler_update_progress(down_scheduler_t *sched, int worker_id, uint64_t current_offset) {
     if (!sched || worker_id < 0 || worker_id >= sched->num_workers) return;
     atomic_store_explicit(&sched->workers[worker_id].current_offset, current_offset, memory_order_release);
 }
 
-bool scheduler_should_worker_stop(inlay_scheduler_t *sched, int worker_id, uint64_t current_offset) {
+bool scheduler_should_worker_stop(down_scheduler_t *sched, int worker_id, uint64_t current_offset) {
     if (!sched || worker_id < 0 || worker_id >= sched->num_workers) return true;
     worker_slot_t *slot = &sched->workers[worker_id];
     pthread_mutex_lock(&slot->lock);
@@ -262,7 +262,7 @@ bool scheduler_should_worker_stop(inlay_scheduler_t *sched, int worker_id, uint6
     return (current_offset > end);
 }
 
-void scheduler_chunk_completed(inlay_scheduler_t *sched, uint32_t chunk_idx) {
+void scheduler_chunk_completed(down_scheduler_t *sched, uint32_t chunk_idx) {
     if (!sched || chunk_idx >= sched->num_chunks) return;
 
     pthread_mutex_lock(&sched->sched_lock);
@@ -279,7 +279,7 @@ void scheduler_chunk_completed(inlay_scheduler_t *sched, uint32_t chunk_idx) {
     pthread_mutex_unlock(&sched->sched_lock);
 }
 
-void scheduler_reclaim_range(inlay_scheduler_t *sched, int worker_id, uint64_t from_offset, uint64_t to_offset) {
+void scheduler_reclaim_range(down_scheduler_t *sched, int worker_id, uint64_t from_offset, uint64_t to_offset) {
     if (!sched) return;
 
     pthread_mutex_lock(&sched->sched_lock);
@@ -306,7 +306,7 @@ void scheduler_reclaim_range(inlay_scheduler_t *sched, int worker_id, uint64_t f
     pthread_mutex_unlock(&sched->sched_lock);
 }
 
-void scheduler_destroy(inlay_scheduler_t *sched) {
+void scheduler_destroy(down_scheduler_t *sched) {
     if (!sched) return;
     for (int w = 0; w < sched->num_workers; w++) {
         pthread_mutex_destroy(&sched->workers[w].lock);

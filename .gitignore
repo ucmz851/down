@@ -1,4 +1,5 @@
 # Binaries & build outputs
+down
 inlay
 build/
 *.o
@@ -12,7 +13,8 @@ build/
 *.iso
 *.img
 
-# Inlay crash-recovery metadata state files
+# Down crash-recovery metadata state files
+*.down
 *.inlay
 
 # Editor & OS temporary files

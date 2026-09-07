@@ -39,10 +39,10 @@ int main(void) {
     assert(strcmp(algo, "md5") == 0);
 
     /* 2. File hashing test: create known file */
-    const char *tmp_file = "/tmp/inlay_test_checksum.tmp";
+    const char *tmp_file = "/tmp/down_test_checksum.tmp";
     FILE *f = fopen(tmp_file, "wb");
     assert(f != NULL);
-    const char *test_data = "Hello, Inlay Checksum Verification!";
+    const char *test_data = "Hello, Down Checksum Verification!";
     fwrite(test_data, 1, strlen(test_data), f);
     fclose(f);
 

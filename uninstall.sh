@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # ==============================================================================
-#  inlay: Automated Uninstaller
+#  down: Automated Uninstaller
 #  High-Performance Segmented Download Engine in C11
 #  Crafted by Usama Imran Cheema (@ucmz851)
 #
 #  One-line removal:
-#    curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/uninstall.sh | bash
+#    curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | bash
 # ==============================================================================
 
 set -euo pipefail
 
-REPO="ucmz851/inlay"
+REPO="ucmz851/down"
 AUTHOR="Usama Imran Cheema (@ucmz851)"
 
 # ── Color Palette & Styling ───────────────────────────────────────────────────
@@ -40,19 +40,23 @@ fi
 
 echo -e "${C_CYAN}"
 cat << 'ASCII'
-  ██╗███╗   ██╗██╗      █████╗ ██╗   ██╗
-  ██║████╗  ██║██║     ██╔══██╗╚██╗ ██╔╝
-  ██║██╔██╗ ██║██║     ███████║ ╚████╔╝ 
-  ██║██║╚██╗██║██║     ██╔══██║  ╚██╔╝  
-  ██║██║ ╚████║███████╗██║  ██║   ██║   
-  ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝   ╚═╝   
+  ██████╗  ██████╗ ██╗    ██╗███╗   ██╗
+  ██╔══██╗██╔═══██╗██║    ██║████╗  ██║
+  ██║  ██║██║   ██║██║ █╗ ██║██╔██╗ ██║
+  ██║  ██║██║   ██║██║███╗██║██║╚██╗██║
+  ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
+  ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝
 ASCII
-echo -e "${C_BOLD}  🗑️  Inlay Automated Uninstaller${C_RESET}"
+echo -e "${C_BOLD}  🗑️  Down Automated Uninstaller${C_RESET}"
 echo -e "  ${C_MUTED}Crafted by ${C_RESET}${C_PURPLE}${C_BOLD}${AUTHOR}${C_RESET}"
 echo -e "  ${C_BLUE}https://github.com/${REPO}${C_RESET}\n"
 
 # Search for candidate installation paths
 CANDIDATES=(
+    "$(command -v down 2>/dev/null || true)"
+    "/usr/local/bin/down"
+    "${HOME}/.local/bin/down"
+    "/usr/bin/down"
     "$(command -v inlay 2>/dev/null || true)"
     "/usr/local/bin/inlay"
     "${HOME}/.local/bin/inlay"
@@ -62,7 +66,7 @@ CANDIDATES=(
 REMOVED=0
 declare -A SEEN
 
-echo -e "${C_BLUE}${C_BOLD}◆ Scanning system for Inlay installations...${C_RESET}"
+echo -e "${C_BLUE}${C_BOLD}◆ Scanning system for Down installations...${C_RESET}"
 
 for target in "${CANDIDATES[@]}"; do
     [ -z "$target" ] && continue
@@ -87,7 +91,7 @@ for target in "${CANDIDATES[@]}"; do
 done
 
 if [ "$REMOVED" -gt 0 ]; then
-    echo -e "\n${C_GREEN}${C_BOLD}✔ Inlay has been completely removed from your system.${C_RESET}\n"
+    echo -e "\n${C_GREEN}${C_BOLD}✔ Down has been completely removed from your system.${C_RESET}\n"
 else
-    echo -e "\n${C_YELLOW}• No active Inlay installations were found on your system.${C_RESET}\n"
+    echo -e "\n${C_YELLOW}• No active Down installations were found on your system.${C_RESET}\n"
 fi

@@ -1,7 +1,7 @@
-#ifndef INLAY_UPDATE_H
-#define INLAY_UPDATE_H
+#ifndef DOWN_UPDATE_H
+#define DOWN_UPDATE_H
 
-#include "inlay.h"
+#include "down.h"
 
 /* Compare two semantic version strings (e.g. "0.0.1" and "0.0.2").
  * Returns:
@@ -11,7 +11,7 @@
  */
 int version_compare(const char *v1, const char *v2);
 
-/* Check GitHub Releases for newer version of inlay.
+/* Check GitHub Releases for newer version of down.
  * If auto_install is true, prompts user and upgrades executable in-place.
  * Returns:
  *   0 on success (either updated or already up-to-date)
@@ -20,4 +20,4 @@ int version_compare(const char *v1, const char *v2);
  */
 int update_check_and_apply(bool auto_install);
 
-#endif /* INLAY_UPDATE_H */
+#endif /* DOWN_UPDATE_H */

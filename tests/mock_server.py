@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 High-concurrency Mock HTTP Server with full HTTP Range request support
-for testing inlay download manager.
+for testing down download manager.
 """
 import sys
 import os

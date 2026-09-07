@@ -46,7 +46,7 @@ static bool parse_bool(const char *str, bool default_val) {
     return default_val;
 }
 
-int config_file_set_option(inlay_config_t *config, const char *key, const char *val) {
+int config_file_set_option(down_config_t *config, const char *key, const char *val) {
     if (!config || !key || !*key) return -1;
 
     if (strcasecmp(key, "connections") == 0 || strcasecmp(key, "workers") == 0 ||
@@ -150,25 +150,35 @@ int config_file_set_option(inlay_config_t *config, const char *key, const char *
 int config_file_find_default(char *dest, size_t dest_size) {
     if (!dest || dest_size == 0) return 0;
 
-    /* 1. $XDG_CONFIG_HOME/inlay/config */
+    /* 1. $XDG_CONFIG_HOME/down/config (or inlay) */
     const char *xdg = getenv("XDG_CONFIG_HOME");
     if (xdg && *xdg) {
+        snprintf(dest, dest_size, "%s/down/config", xdg);
+        if (access(dest, R_OK) == 0) return 1;
         snprintf(dest, dest_size, "%s/inlay/config", xdg);
         if (access(dest, R_OK) == 0) return 1;
     }
 
-    /* 2. ~/.config/inlay/config */
+    /* 2. ~/.config/down/config */
     const char *home = getenv("HOME");
     if (home && *home) {
+        snprintf(dest, dest_size, "%s/.config/down/config", home);
+        if (access(dest, R_OK) == 0) return 1;
         snprintf(dest, dest_size, "%s/.config/inlay/config", home);
         if (access(dest, R_OK) == 0) return 1;
 
-        /* 3. ~/.inlayrc */
+        /* 3. ~/.downrc */
+        snprintf(dest, dest_size, "%s/.downrc", home);
+        if (access(dest, R_OK) == 0) return 1;
         snprintf(dest, dest_size, "%s/.inlayrc", home);
         if (access(dest, R_OK) == 0) return 1;
     }
 
-    /* 4. /etc/inlay/config */
+    /* 4. /etc/down/config */
+    if (access("/etc/down/config", R_OK) == 0) {
+        snprintf(dest, dest_size, "/etc/down/config");
+        return 1;
+    }
     if (access("/etc/inlay/config", R_OK) == 0) {
         snprintf(dest, dest_size, "/etc/inlay/config");
         return 1;
@@ -177,7 +187,7 @@ int config_file_find_default(char *dest, size_t dest_size) {
     return 0;
 }
 
-int config_file_load(inlay_config_t *config, const char *explicit_path) {
+int config_file_load(down_config_t *config, const char *explicit_path) {
     if (!config) return -1;
 
     char resolved_path[1024] = {0};

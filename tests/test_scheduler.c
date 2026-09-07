@@ -19,13 +19,13 @@ int main(void) {
     printf("[*] Running test_scheduler...\n");
 
     const char *url = "http://example.com/test_sched.bin";
-    inlay_meta_t meta;
-    unlink(TEST_SCHED_TARGET INLAY_META_EXT);
+    down_meta_t meta;
+    unlink(TEST_SCHED_TARGET DOWN_META_EXT);
 
     int ret = meta_open(&meta, TEST_SCHED_TARGET, url, TOTAL_SIZE, CHUNK_SIZE, false);
     assert(ret == 0);
 
-    inlay_scheduler_t sched;
+    down_scheduler_t sched;
     ret = scheduler_init(&sched, &meta, TOTAL_SIZE, CHUNK_SIZE, 2, false);
     assert(ret == 0);
     assert(sched.num_chunks == NUM_CHUNKS);

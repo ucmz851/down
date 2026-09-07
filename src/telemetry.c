@@ -86,7 +86,7 @@ static bool use_color(void) {
 }
 
 static void *telemetry_thread_fn(void *arg) {
-    inlay_telemetry_t *telem = (inlay_telemetry_t *)arg;
+    down_telemetry_t *telem = (down_telemetry_t *)arg;
     bool is_tty = isatty(STDOUT_FILENO);
     bool color = use_color();
 
@@ -199,7 +199,7 @@ static void *telemetry_thread_fn(void *arg) {
         } else {
             /* Non-interactive stream output (log file, pipe, CI) */
             if ((now - last_non_tty_log_time) >= 1000000ULL) { /* Every 1s */
-                printf("[inlay] %5.1f%%   %s / %s   %10s   ETA %s   (%d conn)\n",
+                printf("[down] %5.1f%%   %s / %s   %10s   ETA %s   (%d conn)\n",
                        percent, cur_str, tot_str, spd_str,
                        (instant_speed > 512.0 ? eta_str : "--:--"), active_conn);
                 fflush(stdout);
@@ -211,7 +211,7 @@ static void *telemetry_thread_fn(void *arg) {
     return NULL;
 }
 
-int telemetry_init(inlay_telemetry_t *telem, uint64_t total_size, uint64_t initial_bytes, bool quiet) {
+int telemetry_init(down_telemetry_t *telem, uint64_t total_size, uint64_t initial_bytes, bool quiet) {
     if (!telem) return -1;
     memset(telem, 0, sizeof(*telem));
     atomic_store(&telem->total_size, total_size);
@@ -224,12 +224,12 @@ int telemetry_init(inlay_telemetry_t *telem, uint64_t total_size, uint64_t initi
     return 0;
 }
 
-int telemetry_start(inlay_telemetry_t *telem) {
+int telemetry_start(down_telemetry_t *telem) {
     if (!telem || telem->quiet) return 0;
     return pthread_create(&telem->thread, NULL, telemetry_thread_fn, telem);
 }
 
-void telemetry_stop(inlay_telemetry_t *telem) {
+void telemetry_stop(down_telemetry_t *telem) {
     if (!telem) return;
     atomic_store(&telem->stop_requested, true);
 
@@ -244,7 +244,7 @@ void telemetry_stop(inlay_telemetry_t *telem) {
     }
 }
 
-void telemetry_print_complete(const inlay_telemetry_t *telem, const char *filepath) {
+void telemetry_print_complete(const down_telemetry_t *telem, const char *filepath) {
     if (!telem || telem->quiet) return;
 
     uint64_t end_time = current_time_micros();
@@ -276,7 +276,7 @@ void telemetry_print_complete(const inlay_telemetry_t *telem, const char *filepa
     fflush(stdout);
 }
 
-void telemetry_print_paused(const inlay_telemetry_t *telem, const char *filepath,
+void telemetry_print_paused(const down_telemetry_t *telem, const char *filepath,
                             const char *meta_path, const char *url) {
     if (!telem) return;
 
@@ -299,7 +299,7 @@ void telemetry_print_paused(const inlay_telemetry_t *telem, const char *filepath
     printf(" Target File : %s%s%s\n", bold, filepath, reset);
     printf(" Progress    : %s%s / %s (%.1f%% completed)%s\n", yellow, cur_str, tot_str, percent, reset);
     printf(" State File  : %s%s%s (mmap state preserved)\n", bold, meta_path, reset);
-    printf(" Resume With : %sinlay -c -o %s %s%s\n", cyan, filepath, url, reset);
+    printf(" Resume With : %sdown -c -o %s %s%s\n", cyan, filepath, url, reset);
     printf("%s─────────────────────────────────────────────────────────────────────────%s\n", dim, reset);
     fflush(stdout);
 }

@@ -90,7 +90,7 @@ static void *worker_thread_fn(void *arg) {
     curl_easy_setopt(ctx->curl, CURLOPT_URL, ctx->config->url);
     curl_easy_setopt(ctx->curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(ctx->curl, CURLOPT_MAXREDIRS, 10L);
-    curl_easy_setopt(ctx->curl, CURLOPT_USERAGENT, ctx->config->user_agent[0] ? ctx->config->user_agent : ("inlay/" INLAY_VERSION));
+    curl_easy_setopt(ctx->curl, CURLOPT_USERAGENT, ctx->config->user_agent[0] ? ctx->config->user_agent : ("down/" DOWN_VERSION));
     curl_easy_setopt(ctx->curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(ctx->curl, CURLOPT_TCP_NODELAY, 1L);
     curl_easy_setopt(ctx->curl, CURLOPT_WRITEFUNCTION, worker_write_callback);
@@ -196,8 +196,8 @@ static void *worker_thread_fn(void *arg) {
 }
 
 int workers_start(worker_context_t *workers, int num_workers,
-                  const inlay_config_t *config, inlay_storage_t *storage,
-                  inlay_scheduler_t *scheduler, inlay_telemetry_t *telemetry) {
+                  const down_config_t *config, down_storage_t *storage,
+                  down_scheduler_t *scheduler, down_telemetry_t *telemetry) {
     for (int i = 0; i < num_workers; i++) {
         workers[i].worker_id = i;
         workers[i].config = config;
@@ -226,8 +226,8 @@ void workers_join(worker_context_t *workers, int num_workers) {
 }
 
 typedef struct {
-    inlay_storage_t *storage;
-    inlay_telemetry_t *telemetry;
+    down_storage_t *storage;
+    down_telemetry_t *telemetry;
     uint64_t current_offset;
 } single_stream_state_t;
 
@@ -245,8 +245,8 @@ static size_t single_stream_write_cb(char *ptr, size_t size, size_t nmemb, void 
     return total_bytes;
 }
 
-int worker_download_single_stream(const inlay_config_t *config, inlay_storage_t *storage,
-                                 inlay_telemetry_t *telemetry, uint64_t total_size) {
+int worker_download_single_stream(const down_config_t *config, down_storage_t *storage,
+                                 down_telemetry_t *telemetry, uint64_t total_size) {
     (void)total_size;
     CURL *curl = curl_easy_init();
     if (!curl) return -1;
@@ -260,7 +260,7 @@ int worker_download_single_stream(const inlay_config_t *config, inlay_storage_t 
     curl_easy_setopt(curl, CURLOPT_URL, config->url);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("inlay/" INLAY_VERSION));
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, config->user_agent[0] ? config->user_agent : ("down/" DOWN_VERSION));
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, single_stream_write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &state);

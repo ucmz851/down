@@ -7,7 +7,7 @@
 int main(void) {
     printf("[*] Running test_batch...\n");
 
-    const char *tmp_path = "/tmp/inlay_test_urls.txt";
+    const char *tmp_path = "/tmp/down_test_urls.txt";
     FILE *f = fopen(tmp_path, "w");
     assert(f != NULL);
 

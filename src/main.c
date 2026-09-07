@@ -1,4 +1,4 @@
-#include "inlay.h"
+#include "down.h"
 #include "probe.h"
 #include "storage.h"
 #include "meta.h"
@@ -39,7 +39,7 @@ static struct curl_slist *clone_slist(const struct curl_slist *src) {
     return dst;
 }
 
-static void print_download_spec(const inlay_config_t *config, const inlay_probe_t *probe,
+static void print_download_spec(const down_config_t *config, const down_probe_t *probe,
                                 bool is_resumed, uint32_t completed_chunks, uint32_t total_chunks,
                                 uint64_t initial_bytes) {
     if (config->quiet) return;
@@ -58,7 +58,7 @@ static void print_download_spec(const inlay_config_t *config, const inlay_probe_
         snprintf(size_str, sizeof(size_str), "unknown");
     }
 
-    printf("\n%s── inlay %s ─────────────────────────────────────────────────────────%s\n", dim, INLAY_VERSION, reset);
+    printf("\n%s── down %s ─────────────────────────────────────────────────────────%s\n", dim, DOWN_VERSION, reset);
     printf(" Target   : %s%s%s\n", bold, config->output_path, reset);
     if (probe->length_known) {
         printf(" Size     : %s%s%s (%" PRIu64 " bytes)\n", bold, size_str, reset, probe->content_length);
@@ -116,7 +116,7 @@ static void print_download_spec(const inlay_config_t *config, const inlay_probe_
     fflush(stdout);
 }
 
-static int execute_download(inlay_config_t *config) {
+static int execute_download(down_config_t *config) {
     if (!config) return -1;
 
     /* S3 URL handling and auth */
@@ -133,7 +133,7 @@ static int execute_download(inlay_config_t *config) {
         fflush(stdout);
     }
 
-    inlay_probe_t probe;
+    down_probe_t probe;
     if (probe_url(config, &probe) != 0) {
         fprintf(stderr, "[!] Failed to probe remote URL\n");
         return -1;
@@ -167,18 +167,27 @@ static int execute_download(inlay_config_t *config) {
         snprintf(config->output_path, sizeof(config->output_path), "%s", resolved_filename);
     }
 
-    /* Check if control file exists for resume */
+    /* Check if control file exists for resume (.down first, fallback to .inlay) */
     char meta_path[1200];
-    snprintf(meta_path, sizeof(meta_path), "%s%s", config->output_path, INLAY_META_EXT);
+    snprintf(meta_path, sizeof(meta_path), "%s%s", config->output_path, DOWN_META_EXT);
     struct stat st;
     bool has_meta_file = (stat(meta_path, &st) == 0);
+    if (!has_meta_file) {
+        char legacy_meta[1200];
+        snprintf(legacy_meta, sizeof(legacy_meta), "%s%s", config->output_path, INLAY_META_EXT);
+        if (stat(legacy_meta, &st) == 0) {
+            has_meta_file = true;
+            strncpy(meta_path, legacy_meta, sizeof(meta_path) - 1);
+            meta_path[sizeof(meta_path) - 1] = '\0';
+        }
+    }
 
     if (has_meta_file) {
         config->resume_mode = true;
     }
 
     /* Initialize target file and pre-allocate disk blocks */
-    inlay_storage_t storage;
+    down_storage_t storage;
     if (storage_init(&storage, config->output_path, probe.content_length, config->no_fallocate, config->resume_mode) != 0) {
         fprintf(stderr, "[!] Storage initialization failed\n");
         return -1;
@@ -188,10 +197,10 @@ static int execute_download(inlay_config_t *config) {
 
     /* Multi-worker ranged download path */
     if (probe.supports_range && probe.length_known && !config->force_single_stream && config->num_workers > 1) {
-        inlay_meta_t meta;
+        down_meta_t meta;
         if (meta_open(&meta, config->output_path, probe.effective_url,
                       probe.content_length, config->chunk_size, config->resume_mode) != 0) {
-            fprintf(stderr, "[!] Failed to initialize .inlay control file\n");
+            fprintf(stderr, "[!] Failed to initialize .down control file\n");
             storage_close(&storage);
             return -1;
         }
@@ -211,11 +220,11 @@ static int execute_download(inlay_config_t *config) {
         print_download_spec(config, &probe, meta.is_resumed, completed_chunks,
                             meta.hdr->num_chunks, initial_bytes);
 
-        inlay_telemetry_t telemetry;
+        down_telemetry_t telemetry;
         telemetry_init(&telemetry, probe.content_length, initial_bytes, config->quiet);
         telemetry_start(&telemetry);
 
-        inlay_scheduler_t scheduler;
+        down_scheduler_t scheduler;
         if (scheduler_init(&scheduler, &meta, probe.content_length, config->chunk_size,
                            config->num_workers, config->use_static) != 0) {
             fprintf(stderr, "[!] Scheduler initialization failed\n");
@@ -289,7 +298,7 @@ static int execute_download(inlay_config_t *config) {
         /* Single-stream download path */
         print_download_spec(config, &probe, false, 0, 0, 0);
 
-        inlay_telemetry_t telemetry;
+        down_telemetry_t telemetry;
         telemetry_init(&telemetry, probe.content_length, 0, config->quiet);
         telemetry_start(&telemetry);
 
@@ -344,7 +353,7 @@ static int execute_download(inlay_config_t *config) {
 int main(int argc, char **argv) {
     setup_signals();
 
-    inlay_config_t config;
+    down_config_t config;
     if (cli_parse_args(argc, argv, &config) != 0) {
         config_cleanup(&config);
         return 1;
@@ -403,7 +412,7 @@ int main(int argc, char **argv) {
                 printf("=========================================================================\n");
             }
 
-            inlay_config_t item_config = config;
+            down_config_t item_config = config;
             item_config.custom_headers = clone_slist(config.custom_headers);
             snprintf(item_config.url, sizeof(item_config.url), "%s", queue.entries[i].url);
 

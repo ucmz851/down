@@ -69,7 +69,7 @@ static int extract_json_field(const char *json, const char *field, char *dest, s
 }
 
 int update_check_and_apply(bool auto_install) {
-    printf("[*] Checking GitHub for updates (current: v%s)...\n", INLAY_VERSION);
+    printf("[*] Checking GitHub for updates (current: v%s)...\n", DOWN_VERSION);
 
     char tag_name[64] = {0};
     bool tag_found = false;
@@ -88,9 +88,9 @@ int update_check_and_apply(bool auto_install) {
             headers = curl_slist_append(headers, auth_header);
         }
 
-        curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/ucmz851/inlay/releases/latest");
+        curl_easy_setopt(curl, CURLOPT_URL, "https://api.github.com/repos/ucmz851/down/releases/latest");
         curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "down/" DOWN_VERSION);
         if (headers) curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_write_cb);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &body);
@@ -114,11 +114,11 @@ int update_check_and_apply(bool auto_install) {
     if (!tag_found) {
         CURL *redir_curl = curl_easy_init();
         if (redir_curl) {
-            curl_easy_setopt(redir_curl, CURLOPT_URL, "https://github.com/ucmz851/inlay/releases/latest");
+            curl_easy_setopt(redir_curl, CURLOPT_URL, "https://github.com/ucmz851/down/releases/latest");
             curl_easy_setopt(redir_curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(redir_curl, CURLOPT_NOBODY, 1L);
             curl_easy_setopt(redir_curl, CURLOPT_TIMEOUT, 10L);
-            curl_easy_setopt(redir_curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+            curl_easy_setopt(redir_curl, CURLOPT_USERAGENT, "down/" DOWN_VERSION);
 
             if (curl_easy_perform(redir_curl) == CURLE_OK) {
                 char *eff_url = NULL;
@@ -143,18 +143,18 @@ int update_check_and_apply(bool auto_install) {
     const char *clean_tag = tag_name;
     if (*clean_tag == 'v' || *clean_tag == 'V') clean_tag++;
 
-    int cmp = version_compare(clean_tag, INLAY_VERSION);
+    int cmp = version_compare(clean_tag, DOWN_VERSION);
     if (cmp <= 0) {
-        printf("[✓] inlay is already up to date (v%s)\n", INLAY_VERSION);
+        printf("[✓] down is already up to date (v%s)\n", DOWN_VERSION);
         return 0;
     }
 
-    printf("\n[*] A new release of inlay is available: \033[1;32mv%s\033[0m (installed: v%s)\n",
-           clean_tag, INLAY_VERSION);
+    printf("\n[*] A new release of down is available: \033[1;32mv%s\033[0m (installed: v%s)\n",
+           clean_tag, DOWN_VERSION);
 
     if (!auto_install) {
-        printf("    Run 'inlay --update' or rerun the installer script to upgrade:\n");
-        printf("    curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash\n\n");
+        printf("    Run 'down --update' or rerun the installer script to upgrade:\n");
+        printf("    curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash\n\n");
         return 1;
     }
 
@@ -188,8 +188,8 @@ int update_check_and_apply(bool auto_install) {
 
     if (access(dir, W_OK) != 0) {
         fprintf(stderr, "\n[!] Permission denied writing to directory: %s\n", dir);
-        fprintf(stderr, "    Please rerun with sudo: sudo inlay --update\n");
-        fprintf(stderr, "    Or use the installer: curl -fsSL https://raw.githubusercontent.com/ucmz851/inlay/main/install.sh | bash\n\n");
+        fprintf(stderr, "    Please rerun with sudo: sudo down --update\n");
+        fprintf(stderr, "    Or use the installer: curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash\n\n");
         return -1;
     }
 
@@ -210,14 +210,14 @@ int update_check_and_apply(bool auto_install) {
     /* 4. Construct release tarball URL */
     char download_url[512];
     snprintf(download_url, sizeof(download_url),
-             "https://github.com/ucmz851/inlay/releases/download/v%s/inlay-v%s-linux-%s.tar.gz",
+             "https://github.com/ucmz851/down/releases/download/v%s/down-v%s-linux-%s.tar.gz",
              clean_tag, clean_tag, arch);
 
     char tmp_tar[512];
-    snprintf(tmp_tar, sizeof(tmp_tar), "/tmp/inlay_update_%d.tar.gz", (int)getpid());
+    snprintf(tmp_tar, sizeof(tmp_tar), "/tmp/down_update_%d.tar.gz", (int)getpid());
 
     char tmp_extract_dir[512];
-    snprintf(tmp_extract_dir, sizeof(tmp_extract_dir), "/tmp/inlay_update_%d_dir", (int)getpid());
+    snprintf(tmp_extract_dir, sizeof(tmp_extract_dir), "/tmp/down_update_%d_dir", (int)getpid());
 
     mkdir(tmp_extract_dir, 0755);
 
@@ -238,7 +238,7 @@ int update_check_and_apply(bool auto_install) {
 
     curl_easy_setopt(dl_curl, CURLOPT_URL, download_url);
     curl_easy_setopt(dl_curl, CURLOPT_FOLLOWLOCATION, 1L);
-    curl_easy_setopt(dl_curl, CURLOPT_USERAGENT, "inlay/" INLAY_VERSION);
+    curl_easy_setopt(dl_curl, CURLOPT_USERAGENT, "down/" DOWN_VERSION);
     curl_easy_setopt(dl_curl, CURLOPT_WRITEDATA, fp);
 
     CURLcode dl_res = curl_easy_perform(dl_curl);
@@ -268,11 +268,15 @@ int update_check_and_apply(bool auto_install) {
 
     /* 6. Verify extracted binary and replace running executable */
     char new_bin[1024];
-    snprintf(new_bin, sizeof(new_bin), "%s/inlay", tmp_extract_dir);
+    snprintf(new_bin, sizeof(new_bin), "%s/down", tmp_extract_dir);
 
     if (access(new_bin, X_OK) != 0) {
-        fprintf(stderr, "[!] Downloaded package did not contain executable 'inlay'\n");
-        return -1;
+        /* Fallback check for inlay binary name in old releases */
+        snprintf(new_bin, sizeof(new_bin), "%s/inlay", tmp_extract_dir);
+        if (access(new_bin, X_OK) != 0) {
+            fprintf(stderr, "[!] Downloaded package did not contain executable 'down'\n");
+            return -1;
+        }
     }
 
     char staged_path[1200];
@@ -311,7 +315,7 @@ int update_check_and_apply(bool auto_install) {
     unlink(new_bin);
     rmdir(tmp_extract_dir);
 
-    printf("\n\033[1;32m[✓] Successfully updated inlay to v%s!\033[0m\n", clean_tag);
+    printf("\n\033[1;32m[✓] Successfully updated down to v%s!\033[0m\n", clean_tag);
     printf("    Installed executable: %s\n\n", exe_path);
 
     return 0;

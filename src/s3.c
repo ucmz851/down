@@ -44,7 +44,7 @@ int s3_parse_url(const char *s3_url, char *bucket_out, size_t bucket_sz,
     return 0;
 }
 
-int s3_transform_url(inlay_config_t *config) {
+int s3_transform_url(down_config_t *config) {
     if (!config) return -1;
     if (!s3_is_s3_url(config->url)) {
         return 0; /* Nothing to transform */
@@ -94,7 +94,7 @@ int s3_transform_url(inlay_config_t *config) {
     return 0;
 }
 
-int s3_init_auth(inlay_config_t *config) {
+int s3_init_auth(down_config_t *config) {
     if (!config) return -1;
 
     /* Check if S3 credentials/endpoint are in environment */
@@ -156,7 +156,7 @@ int s3_init_auth(inlay_config_t *config) {
     return 0;
 }
 
-int s3_apply_curl_opts(CURL *curl, const inlay_config_t *config) {
+int s3_apply_curl_opts(CURL *curl, const down_config_t *config) {
     if (!curl || !config) return -1;
 
     if (config->aws_sigv4_enabled) {
