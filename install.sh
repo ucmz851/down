@@ -201,7 +201,7 @@ fi
 if [ -n "$LATEST_TAG" ]; then
     VERSION="${LATEST_TAG#v}"
 else
-    VERSION="0.0.1"
+    VERSION="0.0.2"
 fi
 
 echo -e "  ${C_MUTED}Release:${C_RESET} ${C_GREEN}${C_BOLD}v${VERSION}${C_RESET} (latest release)"

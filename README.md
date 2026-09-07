@@ -119,15 +119,15 @@ Download standalone pre-built binaries directly from [GitHub Releases](https://g
 
 ```bash
 # Linux x86_64 (amd64):
-tar -xzf down-v0.0.1-linux-amd64.tar.gz
+tar -xzf down-v0.0.2-linux-amd64.tar.gz
 install -m 755 down ~/.local/bin/down
 
 # macOS Apple Silicon (arm64 / M-series):
-tar -xzf down-v0.0.1-darwin-arm64.tar.gz
+tar -xzf down-v0.0.2-darwin-arm64.tar.gz
 install -m 755 down /usr/local/bin/down
 
 # macOS Intel (x86_64):
-tar -xzf down-v0.0.1-darwin-amd64.tar.gz
+tar -xzf down-v0.0.2-darwin-amd64.tar.gz
 install -m 755 down /usr/local/bin/down
 ```
 

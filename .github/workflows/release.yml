@@ -23,10 +23,6 @@ jobs:
             target: darwin-arm64
             os_name: darwin
             arch_name: arm64
-          - os: macos-13
-            target: darwin-amd64
-            os_name: darwin
-            arch_name: amd64
 
     steps:
       - name: Checkout code

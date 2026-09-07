@@ -22,7 +22,7 @@
 #include <curl/curl.h>
 #include "batch.h"
 
-#define DOWN_VERSION "0.0.1"
+#define DOWN_VERSION "0.0.2"
 #define DEFAULT_NUM_WORKERS 4
 #define MAX_NUM_WORKERS 64
 #define DEFAULT_CONCURRENT_DOWNLOADS 2
