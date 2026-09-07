@@ -160,6 +160,67 @@ int main(void) {
         batch_queue_free(&config.queue);
     }
 
+    /* Subtest 7: Multiple Interrupted Downloads - Option 1 Resumes ALL in Parallel */
+    {
+        /* Prepare two interrupted downloads in history */
+        down_config_t r1, r2;
+        memset(&r1, 0, sizeof(r1));
+        memset(&r2, 0, sizeof(r2));
+        snprintf(r1.url, sizeof(r1.url), "https://archive.org/file1.iso");
+        snprintf(r1.output_path, sizeof(r1.output_path), "/tmp/test_multi_resume1.iso");
+        snprintf(r2.url, sizeof(r2.url), "https://archive.org/file2.iso");
+        snprintf(r2.output_path, sizeof(r2.output_path), "/tmp/test_multi_resume2.iso");
+        history_record_start(&r1, 10000000);
+        history_record_update(&r1, 5000000, 10000000, DOWN_STATUS_INTERRUPTED);
+        history_record_start(&r2, 20000000);
+        history_record_update(&r2, 8000000, 20000000, DOWN_STATUS_INTERRUPTED);
+
+        /* Create mock .down control files */
+        char m1[1200], m2[1200];
+        snprintf(m1, sizeof(m1), "%s%s", r1.output_path, DOWN_META_EXT);
+        snprintf(m2, sizeof(m2), "%s%s", r2.output_path, DOWN_META_EXT);
+        FILE *f1 = fopen(m1, "wb");
+        FILE *f2 = fopen(m2, "wb");
+        assert(f1 && f2);
+        down_meta_hdr_t h1, h2;
+        memset(&h1, 0, sizeof(h1));
+        memset(&h2, 0, sizeof(h2));
+        memcpy(h1.magic, DOWN_META_MAGIC, DOWN_META_MAGIC_LEN);
+        memcpy(h2.magic, DOWN_META_MAGIC, DOWN_META_MAGIC_LEN);
+        h1.file_size = 10000000;
+        h1.chunk_size = 1000000;
+        h1.num_chunks = 10;
+        h1.completed_chunks = 5;
+        h2.file_size = 20000000;
+        h2.chunk_size = 1000000;
+        h2.num_chunks = 20;
+        h2.completed_chunks = 8;
+        fwrite(&h1, 1, sizeof(h1), f1);
+        fwrite(&h2, 1, sizeof(h2), f2);
+        fclose(f1);
+        fclose(f2);
+
+        /* Option 1: Resume ALL in parallel (default) */
+        set_simulated_stdin("1\n");
+        down_config_t config;
+        memset(&config, 0, sizeof(config));
+
+        int res = interactive_run_wizard(&config);
+        assert(res == 0);
+        assert(config.queue.count == 2);
+        assert(config.resume_mode == true);
+        assert(config.max_concurrent_downloads == 2);
+        assert(strcmp(config.queue.entries[0].url, "https://archive.org/file2.iso") == 0);
+        assert(strcmp(config.queue.entries[0].output_name, "/tmp/test_multi_resume2.iso") == 0);
+        assert(strcmp(config.queue.entries[1].url, "https://archive.org/file1.iso") == 0);
+        assert(strcmp(config.queue.entries[1].output_name, "/tmp/test_multi_resume1.iso") == 0);
+
+        batch_queue_free(&config.queue);
+        history_clear();
+        unlink(m1);
+        unlink(m2);
+    }
+
     printf("[+] test_interactive passed successfully!\n");
     return 0;
 }

@@ -157,39 +157,62 @@ check_resumable: ;
                     char dl_str[32], tot_str[32];
                     format_bytes(resumable[i].downloaded_bytes, dl_str, sizeof(dl_str));
                     format_bytes(resumable[i].total_bytes, tot_str, sizeof(tot_str));
-                    printf("    [%d] %s%s%s — %.1f%% (%s / %s)\n",
-                           i + 1, bold, base, reset, resumable[i].percent, dl_str, tot_str);
+                    printf("    • %s%s%s — %.1f%% (%s / %s completed)\n",
+                           bold, base, reset, resumable[i].percent, dl_str, tot_str);
                 }
-                int opt_new = res_count + 1;
-                int opt_adv = res_count + 2;
-                int opt_hist = res_count + 3;
+                int opt_new = res_count + 2;
+                int opt_adv = res_count + 3;
+                int opt_hist = res_count + 4;
+                int opt_discard = res_count + 5;
 
                 printf("\n%sWhat would you like to do?%s\n", bold, reset);
+                printf("  %s[1]%s %sResume ALL %d downloads in parallel%s %s(Recommended)%s\n",
+                       green, reset, bold, res_count, reset, dim, reset);
                 for (int i = 0; i < res_count; i++) {
                     const char *base = strrchr(resumable[i].output_path, '/');
                     base = base ? (base + 1) : resumable[i].output_path;
-                    printf("  %s[%d]%s Resume '%s'\n", i == 0 ? green : bold, i + 1, reset, base);
+                    printf("  %s[%d]%s Resume '%s' only\n", bold, i + 2, reset, base);
                 }
                 printf("  %s[%d]%s Start a new download (Quick Start)\n", bold, opt_new, reset);
                 printf("  %s[%d]%s Advanced setup for new download\n", bold, opt_adv, reset);
-                printf("  %s[%d]%s View all download history\n\n", dim, opt_hist, reset);
+                printf("  %s[%d]%s View all download history\n", dim, opt_hist, reset);
+                printf("  %s[%d]%s Discard all resume states\n\n", dim, opt_discard, reset);
 
                 char res_buf[32];
                 char res_prompt[128];
                 snprintf(res_prompt, sizeof(res_prompt), "%s?%s Select option [1-%d] %s(default: 1)%s: ",
-                         cyan, reset, opt_hist, dim, reset);
+                         cyan, reset, opt_discard, dim, reset);
                 if (!prompt_input(res_prompt, res_buf, sizeof(res_buf), true)) {
                     printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
                     return -1;
                 }
 
                 int sel = res_buf[0] ? atoi(res_buf) : 1;
-                if (sel >= 1 && sel <= res_count) {
-                    int pick = sel - 1;
+                if (sel == 1) {
+                    /* Resume all interrupted downloads concurrently */
+                    batch_queue_free(&config->queue);
+                    batch_queue_init(&config->queue);
+                    for (int i = 0; i < res_count; i++) {
+                        batch_queue_add(&config->queue, resumable[i].url, resumable[i].output_path, NULL);
+                    }
+                    snprintf(config->url, sizeof(config->url), "%s", resumable[0].url);
+                    config->resume_mode = true;
+                    if (config->num_workers <= 0) config->num_workers = DEFAULT_NUM_WORKERS;
+                    config->max_concurrent_downloads = (res_count > MAX_CONCURRENT_DOWNLOADS) ? MAX_CONCURRENT_DOWNLOADS : res_count;
+
+                    printf("\n%s── Resuming %d Downloads (Swarm Parallel Mode) ─────────%s\n", dim, res_count, reset);
+                    printf("  %sQueue%s       : %d files to resume\n", bold, reset, res_count);
+                    printf("  %sConcurrency%s : %d parallel downloads\n", bold, reset, config->max_concurrent_downloads);
+                    printf("  %sConnections%s : %d per file\n", bold, reset, config->num_workers);
+                    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+                    return 0;
+                } else if (sel >= 2 && sel <= res_count + 1) {
+                    int pick = sel - 2;
                     snprintf(config->url, sizeof(config->url), "%s", resumable[pick].url);
                     snprintf(config->output_path, sizeof(config->output_path), "%s", resumable[pick].output_path);
                     config->resume_mode = true;
                     if (config->num_workers <= 0) config->num_workers = DEFAULT_NUM_WORKERS;
+                    config->max_concurrent_downloads = 1;
 
                     char dl_str[32], tot_str[32];
                     format_bytes(resumable[pick].downloaded_bytes, dl_str, sizeof(dl_str));
@@ -208,6 +231,12 @@ check_resumable: ;
                     forced_mode = 2;
                 } else if (sel == opt_hist) {
                     history_print_table();
+                    goto check_resumable;
+                } else if (sel == opt_discard) {
+                    for (int i = 0; i < res_count; i++) {
+                        history_discard_resumable(resumable[i].output_path);
+                    }
+                    printf("%s[+] Discarded %d resume states%s\n\n", green, res_count, reset);
                     goto check_resumable;
                 }
             }
