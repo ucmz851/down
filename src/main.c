@@ -46,74 +46,82 @@ static void print_download_spec(const down_config_t *config, const down_probe_t 
     if (config->quiet) return;
 
     bool color = isatty(STDOUT_FILENO) && !getenv("NO_COLOR");
-    const char *dim = color ? "\033[38;5;244m" : "";
-    const char *bold = color ? "\033[1m" : "";
-    const char *cyan = color ? "\033[1;36m" : "";
-    const char *yellow = color ? "\033[1;33m" : "";
-    const char *reset = color ? "\033[0m" : "";
+    const char *dim    = color ? "\033[38;5;240m" : "";
+    const char *lbl    = color ? "\033[38;5;246m" : "";
+    const char *bold   = color ? "\033[1;37m" : "";
+    const char *cyan   = color ? "\033[1;38;5;45m" : "";
+    const char *green  = color ? "\033[1;38;5;48m" : "";
+    const char *yellow = color ? "\033[1;38;5;214m" : "";
+    const char *pur    = color ? "\033[38;5;141m" : "";
+    const char *reset  = color ? "\033[0m" : "";
 
     char size_str[32];
+    char bytes_str[32];
     if (probe->length_known) {
         format_bytes(probe->content_length, size_str, sizeof(size_str));
+        format_number_commas(probe->content_length, bytes_str, sizeof(bytes_str));
     } else {
         snprintf(size_str, sizeof(size_str), "unknown");
+        snprintf(bytes_str, sizeof(bytes_str), "unknown");
     }
 
-    printf("\n%s── down %s ─────────────────────────────────────────────────────────%s\n", dim, DOWN_VERSION, reset);
-    printf(" Target   : %s%s%s\n", bold, config->output_path, reset);
+    printf("\n%s──%s %s⚡ down v%s%s %s──────────────────────────────────────────────────%s\n",
+           dim, reset, cyan, DOWN_VERSION, reset, dim, reset);
+    printf("  %sTarget%s   : %s%s%s\n", lbl, reset, bold, config->output_path, reset);
     if (probe->length_known) {
-        printf(" Size     : %s%s%s (%" PRIu64 " bytes)\n", bold, size_str, reset, probe->content_length);
+        printf("  %sSize%s     : %s%s%s %s(%s bytes)%s\n", lbl, reset, bold, size_str, reset, dim, bytes_str, reset);
     } else {
-        printf(" Size     : %s%s%s\n", bold, size_str, reset);
+        printf("  %sSize%s     : %s%s%s\n", lbl, reset, bold, size_str, reset);
     }
-    printf(" Source   : %s\n", config->url);
+    printf("  %sSource%s   : %s%s%s\n", lbl, reset, dim, config->url, reset);
 
     if (probe->supports_range && probe->length_known && !config->force_single_stream && config->num_workers > 1) {
-        printf(" Engine   : %s%s%s (%d workers, %u KB chunk size)\n",
-               cyan, config->use_static ? "Static Partitioning" : "Dynamic Work-Stealing", reset,
-               config->num_workers, config->chunk_size / 1024);
+        printf("  %sEngine%s   : %s%s%s %s(%d workers • %u KB chunk size)%s\n",
+               lbl, reset, cyan, config->use_static ? "Static Partitioning" : "Dynamic Work-Stealing", reset,
+               pur, config->num_workers, config->chunk_size / 1024, reset);
     } else {
-        printf(" Engine   : %sSingle-Stream Sequential%s\n", cyan, reset);
+        printf("  %sEngine%s   : %sSingle-Stream Sequential%s\n", lbl, reset, cyan, reset);
     }
 
     if (config->http_version == CURL_HTTP_VERSION_3) {
-        printf(" Protocol : HTTP/3 (QUIC) with fallback\n");
+        printf("  %sProtocol%s : %sHTTP/3 (QUIC) with fallback%s\n", lbl, reset, cyan, reset);
     } else if (config->http_version == CURL_HTTP_VERSION_3ONLY) {
-        printf(" Protocol : HTTP/3 (QUIC only)\n");
+        printf("  %sProtocol%s : %sHTTP/3 (QUIC only)%s\n", lbl, reset, cyan, reset);
     }
 
     if (config->aws_sigv4_enabled) {
-        printf(" Auth     : AWS SigV4 (Region: %s, Service: %s)\n",
+        printf("  %sAuth%s     : %sAWS SigV4%s %s(Region: %s, Service: %s)%s\n",
+               lbl, reset, cyan, reset, dim,
                config->aws_region[0] ? config->aws_region : "us-east-1",
-               config->aws_service[0] ? config->aws_service : "s3");
+               config->aws_service[0] ? config->aws_service : "s3", reset);
     }
 
     if (config->expected_checksum[0] != '\0') {
-        printf(" Checksum : %s:%s\n", config->checksum_algo, config->expected_checksum);
+        printf("  %sChecksum%s : %s%s:%s%s\n", lbl, reset, green, config->checksum_algo, config->expected_checksum, reset);
     }
 
     if (!config->no_fallocate && probe->length_known) {
-        printf(" Storage  : Contiguous blocks pre-allocated (posix_fallocate)\n");
+        printf("  %sStorage%s  : Pre-allocated contiguous blocks %s(posix_fallocate)%s\n", lbl, reset, dim, reset);
     }
 
     if (config->max_speed_limit > 0) {
         char limit_str[32];
         format_bytes(config->max_speed_limit, limit_str, sizeof(limit_str));
-        printf(" Speed    : Rate-limited to %s/s\n", limit_str);
+        printf("  %sSpeed%s    : %sRate-limited to %s/s%s\n", lbl, reset, yellow, limit_str, reset);
     }
 
     if (config->insecure) {
-        printf(" Security : TLS verification disabled (insecure mode)\n");
+        printf("  %sSecurity%s : %sTLS verification disabled (insecure mode)%s\n", lbl, reset, yellow, reset);
     }
 
     if (is_resumed && completed_chunks > 0) {
         char init_str[32];
         format_bytes(initial_bytes, init_str, sizeof(init_str));
         double percent = probe->content_length > 0 ? ((double)initial_bytes / (double)probe->content_length) * 100.0 : 0.0;
-        printf(" Status   : %sResuming from chunk %u/%u (%s / %.1f%% completed)%s\n",
-               yellow, completed_chunks, total_chunks, init_str, percent, reset);
+        printf("  %sStatus%s   : %sResuming from chunk %u/%u (%s / %.1f%% completed)%s\n",
+               lbl, reset, yellow, completed_chunks, total_chunks, init_str, percent, reset);
     }
-    printf("%s─────────────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
     fflush(stdout);
 }
 

@@ -36,6 +36,9 @@ void telemetry_print_paused(const down_telemetry_t *telem, const char *filepath,
 /* Format duration (e.g., 01m 24s or 45s) */
 void format_duration(uint64_t seconds, char *buf, size_t buf_size);
 
+/* Format integer with comma digit separators (e.g., 6,227,427,328) */
+void format_number_commas(uint64_t n, char *buf, size_t sz);
+
 /* Add bytes directly to downloaded counter */
 static inline void telemetry_add_bytes(down_telemetry_t *telem, size_t bytes) {
     if (telem) {
