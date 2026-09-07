@@ -10,24 +10,44 @@
 
 ---
 
-## 🚀 30-Second Quick Start
+## ⚡ Fast Install & Uninstall
 
-Get downloading immediately — no complex flags required:
-
+**Install or Update to Latest Release**:
 ```bash
-# 1. One-line install or update:
 curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
+```
 
-# 2. Type 'down' and press Enter for the guided interactive wizard:
+**Uninstall Completely**:
+```bash
+curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | bash
+```
+*(Tip: pass `--purge` to also wipe history and configuration: `curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | bash -s -- --purge`)*
+
+---
+
+## 🚀 Quick Start Guide
+
+Each command below is independent and ready to copy:
+
+### 1. Launch Guided Interactive Wizard (Zero Flags Needed)
+Simply type `down` in your terminal and press `[Enter]`:
+```bash
 down
+```
 
-# 3. Or download directly at maximum multi-connection speed:
+### 2. Direct High-Speed Download (4 Parallel Connections)
+```bash
 down https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+```
 
-# 4. Download multiple files simultaneously in parallel slots:
+### 3. Parallel Multi-File Swarm
+Download multiple files concurrently in parallel slots:
+```bash
 down -j 2 https://example.com/file1.iso https://example.com/file2.iso
+```
 
-# 5. View your past downloads and resumable sessions:
+### 4. Check Download History & Resumable Sessions
+```bash
 down --history
 ```
 
