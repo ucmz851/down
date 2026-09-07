@@ -1,5 +1,7 @@
 <p align="center">
-  <img src="assets/down.png" alt="down logo" width="128" height="128" />
+  <a href="https://github.com/ucmz851/down">
+    <img src="https://github.com/ucmz851/down/releases/download/v0.0.2/down.png" alt="down logo" width="140" height="140" />
+  </a>
 </p>
 
 <h1 align="center">down</h1>
@@ -23,7 +25,7 @@
 ## 🎬 Demo
 
 <p align="center">
-  <img src="assets/demo.gif" alt="down interactive terminal demo" width="100%" />
+  <img src="https://github.com/ucmz851/down/releases/download/v0.0.2/demo.gif" alt="down interactive terminal demo" width="100%" />
 </p>
 
 <p align="center">
