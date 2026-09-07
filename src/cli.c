@@ -94,7 +94,7 @@ void cli_print_version(void) {
 
 void cli_print_usage(const char *prog_name) {
     printf("Usage: %s [OPTIONS] <URL> [<URL2> ...]\n\n", prog_name);
-    printf("High-performance segmented download engine with zero-assembly positional I/O.\n\n");
+    printf("down (Download Over Wide Networks) — High-performance segmented download engine.\n\n");
     printf("Arguments:\n");
     printf("  <URL>                      HTTP, HTTPS, or S3 (s3://) resource URLs to download\n\n");
     printf("Modes & Wizards:\n");

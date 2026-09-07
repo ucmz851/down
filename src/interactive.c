@@ -80,7 +80,7 @@ int interactive_run_wizard(down_config_t *config) {
 
     printf("\n");
     printf("%s  down — Interactive Setup Wizard%s\n", cyan, reset);
-    printf("%s  High-performance streaming download accelerator%s\n", dim, reset);
+    printf("%s  Download Over Wide Networks — High-Performance Accelerator%s\n", dim, reset);
     printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
 
     int forced_mode = 0; /* 0: ask, 1: quick start, 2: advanced */

@@ -7,7 +7,8 @@
 <h1 align="center">down</h1>
 
 <p align="center">
-  <strong>High-performance streaming multi-connection download accelerator in C</strong>
+  <strong>Download Over Wide Networks</strong><br />
+  High-performance segmented multi-connection download accelerator in C
 </p>
 
 <p align="center">
@@ -199,7 +200,7 @@ down
 
 ```text
   down — Interactive Setup Wizard
-  High-performance streaming download accelerator
+  Download Over Wide Networks — High-Performance Accelerator
 ─────────────────────────────────────────────────────────────────
 
 ? Enter download URL(s): https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
@@ -228,7 +229,7 @@ If your download gets interrupted by `Ctrl+C`, network failure, or a sudden powe
 
 ```text
   down — Interactive Setup Wizard
-  High-performance streaming download accelerator
+  Download Over Wide Networks — High-Performance Accelerator
 ─────────────────────────────────────────────────────────────────
 
   Found an interrupted / resumable download:
