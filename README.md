@@ -10,12 +10,18 @@
 
 ---
 
-## ⚡ Fast Install & Uninstall
+## ⚡ Fast Install, Update & Uninstall
 
 **Install or Update to Latest Release**:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 ```
+
+**Self-Update In-Place (Built-in CLI)**:
+```bash
+down --update
+```
+*(Check if a newer version is available without installing: `down --check-update`)*
 
 **Uninstall Completely**:
 ```bash
@@ -99,6 +105,13 @@ curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 ```
 
 The installer automatically detects your Linux architecture, fetches the official release, verifies its SHA-256 checksum, and deploys `down` into `~/.local/bin` (or `/usr/local/bin` if privileged).
+
+> [!TIP]
+> **Built-in Self-Updater**: Once installed, you can update `down` in-place anytime directly from your terminal by running:
+> ```bash
+> down --update
+> ```
+> Or check if a newer version is available without installing: `down --check-update`.
 
 ### Method 2: Pre-Compiled Release Binaries
 
