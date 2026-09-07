@@ -50,7 +50,7 @@ print_banner() {
   ██████╔╝╚██████╔╝╚███╔███╔╝██║ ╚████║
   ╚═════╝  ╚═════╝  ╚══╝╚══╝ ╚═╝  ╚═══╝
 ASCII
-    echo -e "${C_BOLD}  ⚡ High-Performance Positional I/O Segmented Engine${C_RESET}"
+    echo -e "${C_BOLD}  High-Performance Positional I/O Segmented Engine${C_RESET}"
     echo -e "  ${C_MUTED}Crafted by ${C_RESET}${C_PURPLE}${C_BOLD}${AUTHOR}${C_RESET}"
     echo -e "  ${C_BLUE}https://github.com/${REPO}${C_RESET}\n"
 }

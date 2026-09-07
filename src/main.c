@@ -66,7 +66,7 @@ static void print_download_spec(const down_config_t *config, const down_probe_t 
         snprintf(bytes_str, sizeof(bytes_str), "unknown");
     }
 
-    printf("\n%s──%s %s⚡ down v%s%s %s──────────────────────────────────────────────────%s\n",
+    printf("\n%s──%s %sdown v%s%s %s────────────────────────────────────────────────────%s\n",
            dim, reset, cyan, DOWN_VERSION, reset, dim, reset);
     printf("  %sTarget%s   : %s%s%s\n", lbl, reset, bold, config->output_path, reset);
     if (probe->length_known) {

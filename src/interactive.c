@@ -79,8 +79,8 @@ int interactive_run_wizard(down_config_t *config) {
     const char *reset = color ? "\033[0m" : "";
 
     printf("\n");
-    printf("%s  ⚡ DOWN — High-Performance Download Manager%s\n", cyan, reset);
-    printf("%s  Interactive Setup Wizard%s\n", dim, reset);
+    printf("%s  down — Interactive Setup Wizard%s\n", cyan, reset);
+    printf("%s  High-performance streaming download accelerator%s\n", dim, reset);
     printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
 
     int forced_mode = 0; /* 0: ask, 1: quick start, 2: advanced */
@@ -100,7 +100,7 @@ check_resumable: ;
                 const char *base = strrchr(resumable[0].output_path, '/');
                 base = base ? (base + 1) : resumable[0].output_path;
 
-                printf("%s  ⚡ Found an interrupted / resumable download:%s\n", yellow, reset);
+                printf("%s  Found an interrupted / resumable download:%s\n", yellow, reset);
                 printf("    %sFile%s        : %s%s%s\n", bold, reset, cyan, base, reset);
                 printf("    %sProgress%s    : %s%.1f%%%s (%s / %s completed)\n",
                        bold, reset, green, resumable[0].percent, reset, dl_str, tot_str);
@@ -150,7 +150,7 @@ check_resumable: ;
                     goto check_resumable;
                 }
             } else {
-                printf("%s  ⚡ Found %d interrupted / resumable downloads:%s\n", yellow, res_count, reset);
+                printf("%s  Found %d interrupted / resumable downloads:%s\n", yellow, res_count, reset);
                 for (int i = 0; i < res_count; i++) {
                     const char *base = strrchr(resumable[i].output_path, '/');
                     base = base ? (base + 1) : resumable[i].output_path;

@@ -408,7 +408,7 @@ void history_print_table(void) {
     const char *bold = color ? "\033[1m" : "";
     const char *reset = color ? "\033[0m" : "";
 
-    printf("\n%s  ⚡ DOWN — Download History & Sessions%s\n", cyan, reset);
+    printf("\n%s  down — Download History & Sessions%s\n", cyan, reset);
     printf("%s──────────────────────────────────────────────────────────────────────────────────────────%s\n", dim, reset);
     printf("  %-19s  %-12s  %-16s  %s\n", "Date/Time", "Status", "Progress", "File / Source");
     printf("%s──────────────────────────────────────────────────────────────────────────────────────────%s\n", dim, reset);

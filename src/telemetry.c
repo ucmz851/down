@@ -350,7 +350,7 @@ static void *telemetry_thread_fn(void *arg) {
                     }
                 } else {
                     if (color) {
-                        printf("\r\033[2K \033[1;38;5;45m⚡ STREAM\033[0m  %s", info_buf);
+                        printf("\r\033[2K \033[1;38;5;45mSTREAM\033[0m  %s", info_buf);
                     } else {
                         printf("\r\033[2K STREAM  %s", info_buf);
                     }

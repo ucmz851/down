@@ -20,7 +20,19 @@
 
 ---
 
-## ⚡ Fast Install, Update & Uninstall
+## 🎬 Demo
+
+<p align="center">
+  <img src="assets/demo.gif" alt="down interactive terminal demo" width="100%" />
+</p>
+
+<p align="center">
+  <sub>Full session recording: <a href="assets/screenrecording-2026-09-07_11-37-24_trimmed.mp4"><code>assets/screenrecording-2026-09-07_11-37-24_trimmed.mp4</code></a></sub>
+</p>
+
+---
+
+## 📦 Installation & Updates
 
 **Install or Update to Latest Release**:
 ```bash
@@ -71,7 +83,7 @@ down --history
 
 ## ✨ Key Features
 
-- **⚡ Lockless Positional I/O**: Writes directly to pre-allocated disk sectors via atomic `pwrite()` system calls. Eliminates temporary chunk files, post-download concatenation delays, and filesystem fragmentation on ext4, Btrfs, and XFS.
+- **Lockless Positional I/O**: Writes directly to pre-allocated disk sectors via atomic `pwrite()` system calls. Eliminates temporary chunk files, post-download concatenation delays, and filesystem fragmentation on ext4, Btrfs, and XFS.
 - **🧙 Guided Interactive Wizard**: Don't want to memorize flags? Simply run `down` with no arguments to launch an interactive setup wizard with beginner-friendly Quick Start and Advanced customization modes.
 - **🐝 Parallel Multi-Download Swarms (`-j, --concurrent`)**: Download multiple files simultaneously with independent worker pools and a live, high-frequency stacked telemetry dashboard with aggregate bandwidth and total ETA.
 - **🔄 Instant Zero-Rehash Crash Recovery**: Transfer state is mirrored into a compact memory-mapped control file (`<file>.down`). If internet drops or your PC loses power, resume instantly with 1 keystroke without re-reading or re-hashing gigabytes of data.
@@ -184,8 +196,8 @@ down
 ```
 
 ```text
-  ⚡ DOWN — High-Performance Download Manager
-  Interactive Setup Wizard
+  down — Interactive Setup Wizard
+  High-performance streaming download accelerator
 ─────────────────────────────────────────────────────────────────
 
 ? Enter download URL(s): https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
@@ -213,11 +225,11 @@ If your download gets interrupted by `Ctrl+C`, network failure, or a sudden powe
 - Simply type `down` again. It automatically detects the unfinished download and prompts you to resume:
 
 ```text
-  ⚡ DOWN — High-Performance Download Manager
-  Interactive Setup Wizard
+  down — Interactive Setup Wizard
+  High-performance streaming download accelerator
 ─────────────────────────────────────────────────────────────────
 
-  ⚡ Found an interrupted / resumable download:
+  Found an interrupted / resumable download:
     File        : ubuntu-24.04-desktop-amd64.iso
     Progress    : 45.2% (2.62 GB / 5.80 GB completed)
     Source URL  : https://releases.ubuntu.com/...
@@ -252,7 +264,7 @@ down --clear-history
 ```
 
 ```text
-  ⚡ DOWN — Download History & Sessions
+  down — Download History & Sessions
 ──────────────────────────────────────────────────────────────────────────────────────────
   Date/Time            Status        Progress          File / Source
 ──────────────────────────────────────────────────────────────────────────────────────────
@@ -267,7 +279,7 @@ down --clear-history
 
 ---
 
-### 4. ⚡ Direct CLI Downloads
+### 4. 🎯 Direct CLI Downloads
 
 ```bash
 # Download a file (filename inferred automatically from URL headers):

@@ -222,7 +222,7 @@ static void *swarm_telemetry_thread_fn(void *arg) {
             size_t remaining_q = (total_q > (completed_c + active_c)) ? (total_q - completed_c - active_c) : 0;
 
             /* Line 1: Header */
-            printf("\r\033[2K%s──%s %s⚡ down swarm • %zu active (%zu queued, %zu done)%s %s──────────────────%s\n",
+            printf("\r\033[2K%s──%s %sdown swarm • %zu active (%zu queued, %zu done)%s %s────────────────────%s\n",
                    dim, rst, cyan, active_c, remaining_q, completed_c, rst, dim, rst);
             current_rendered_lines++;
 
@@ -360,8 +360,8 @@ static void *swarm_telemetry_thread_fn(void *arg) {
                 snprintf(agg_eta_str, sizeof(agg_eta_str), "--:--");
             }
 
-            printf("\r\033[2K  %s⚡%s %sAggregate:%s %s%s%s %s•%s %s%s%s %s/%s %s%s%s (%s%.1f%%%s) %s•%s %sETA %s%s%s\n",
-                   cyan, rst, lbl, rst, green, agg_spd_s, rst,
+            printf("\r\033[2K  %sAggregate:%s %s%s%s %s•%s %s%s%s %s/%s %s%s%s (%s%.1f%%%s) %s•%s %sETA %s%s%s\n",
+                   lbl, rst, green, agg_spd_s, rst,
                    dim, rst, val, agg_cur_s, rst, dim, rst, lbl, agg_tot_s, rst,
                    cyan, agg_pct, rst,
                    dim, rst, lbl, yel, agg_eta_str, rst);
@@ -436,7 +436,7 @@ int swarm_execute(const down_config_t *base_config, batch_queue_t *queue, int ma
     const char *reset = color ? "\033[0m" : "";
 
     if (!base_config->quiet) {
-        printf("\n%s──%s %s⚡ down swarm v%s%s %s────────────────────────────────────────────%s\n",
+        printf("\n%s──%s %sdown swarm v%s%s %s──────────────────────────────────────────────%s\n",
                dim, reset, cyan, DOWN_VERSION, reset, dim, reset);
         printf("  %sQueue Size%s   : %s%zu files%s\n", lbl, reset, bold, queue->count, reset);
         printf("  %sConcurrency%s  : %s%d files in parallel%s %s(%d connections per file)%s\n",
