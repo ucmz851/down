@@ -3,8 +3,43 @@
 #include <time.h>
 #include <sys/file.h>
 #include <pthread.h>
+#include <limits.h>
 
 static pthread_mutex_t g_history_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static bool is_same_target_file(const char *path1, const char *path2) {
+    if (!path1 || !path2) return false;
+    if (strcmp(path1, path2) == 0) return true;
+
+    /* Normalize leading "./" */
+    const char *p1 = path1;
+    while (p1[0] == '.' && p1[1] == '/') p1 += 2;
+    const char *p2 = path2;
+    while (p2[0] == '.' && p2[1] == '/') p2 += 2;
+    if (strcmp(p1, p2) == 0) return true;
+
+    /* Realpath match if both exist */
+    char r1[PATH_MAX], r2[PATH_MAX];
+    if (realpath(path1, r1) && realpath(path2, r2)) {
+        if (strcmp(r1, r2) == 0) return true;
+    }
+
+    /* Check file device and inode */
+    struct stat s1, s2;
+    if (stat(path1, &s1) == 0 && stat(path2, &s2) == 0) {
+        if (s1.st_dev == s2.st_dev && s1.st_ino == s2.st_ino) return true;
+    }
+
+    /* Check .down control file device and inode */
+    char m1[1200], m2[1200];
+    snprintf(m1, sizeof(m1), "%s%s", path1, DOWN_META_EXT);
+    snprintf(m2, sizeof(m2), "%s%s", path2, DOWN_META_EXT);
+    if (stat(m1, &s1) == 0 && stat(m2, &s2) == 0) {
+        if (s1.st_dev == s2.st_dev && s1.st_ino == s2.st_ino) return true;
+    }
+
+    return false;
+}
 
 static void get_current_timestamp(char *buf, size_t sz) {
     if (!buf || sz == 0) return;
@@ -141,6 +176,7 @@ int history_load_all(down_history_entry_t *entries, int max_entries) {
         *t4 = '\0';
         p = t4 + 1;
         char *col_path = p;
+        while (col_path[0] == '.' && col_path[1] == '/') col_path += 2;
 
         char *t5 = strchr(p, '\t');
         char *col_url = "";
@@ -148,6 +184,16 @@ int history_load_all(down_history_entry_t *entries, int max_entries) {
             *t5 = '\0';
             col_url = t5 + 1;
         }
+
+        /* Skip duplicate entries for the same target file (keep newer entry) */
+        bool is_dup = false;
+        for (int k = 0; k < count; k++) {
+            if (is_same_target_file(entries[k].output_path, col_path)) {
+                is_dup = true;
+                break;
+            }
+        }
+        if (is_dup) continue;
 
         down_history_entry_t *e = &entries[count];
         memset(e, 0, sizeof(*e));
@@ -209,7 +255,16 @@ int history_load_resumable(down_history_entry_t *entries, int max_entries) {
     int resumable_count = 0;
     for (int i = 0; i < all_count && resumable_count < max_entries; i++) {
         if (all[i].has_meta_file && all[i].status != DOWN_STATUS_COMPLETED) {
-            entries[resumable_count++] = all[i];
+            bool duplicate = false;
+            for (int k = 0; k < resumable_count; k++) {
+                if (is_same_target_file(entries[k].output_path, all[i].output_path)) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                entries[resumable_count++] = all[i];
+            }
         }
     }
 
@@ -229,7 +284,7 @@ int history_record_start(const down_config_t *config, uint64_t total_bytes) {
     /* Check if this output_path already has an entry */
     int existing_idx = -1;
     for (int i = 0; i < count; i++) {
-        if (strcmp(entries[i].output_path, config->output_path) == 0) {
+        if (is_same_target_file(entries[i].output_path, config->output_path)) {
             existing_idx = i;
             break;
         }
@@ -270,7 +325,7 @@ int history_record_update(const down_config_t *config, uint64_t downloaded, uint
 
     int idx = -1;
     for (int i = 0; i < count; i++) {
-        if (strcmp(entries[i].output_path, config->output_path) == 0) {
+        if (is_same_target_file(entries[i].output_path, config->output_path)) {
             idx = i;
             break;
         }
@@ -312,16 +367,22 @@ int history_discard_resumable(const char *output_path) {
     snprintf(meta_path, sizeof(meta_path), "%s%s", output_path, INLAY_META_EXT);
     unlink(meta_path);
 
+    const char *np = output_path;
+    while (np[0] == '.' && np[1] == '/') np += 2;
+    snprintf(meta_path, sizeof(meta_path), "%s%s", np, DOWN_META_EXT);
+    unlink(meta_path);
+    snprintf(meta_path, sizeof(meta_path), "%s%s", np, INLAY_META_EXT);
+    unlink(meta_path);
+
     pthread_mutex_lock(&g_history_mutex);
     /* Update history entry status */
     down_history_entry_t entries[MAX_HISTORY_ENTRIES];
     int count = history_load_all(entries, MAX_HISTORY_ENTRIES);
 
     for (int i = 0; i < count; i++) {
-        if (strcmp(entries[i].output_path, output_path) == 0) {
+        if (is_same_target_file(entries[i].output_path, output_path)) {
             entries[i].status = DOWN_STATUS_FAILED;
             entries[i].has_meta_file = false;
-            break;
         }
     }
 

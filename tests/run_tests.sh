@@ -8,6 +8,9 @@ echo "=========================================================="
 echo "    Down Test Suite: Validating Core Engine & Extensions  "
 echo "=========================================================="
 
+TEST_STATE_DIR=$(mktemp -d /tmp/down_state_XXXXXX)
+export XDG_STATE_HOME="$TEST_STATE_DIR"
+
 echo "[1/7] Compiling unit tests..."
 mkdir -p build
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_storage.c src/storage.c -o test_storage -lpthread
@@ -61,7 +64,7 @@ SERVER_PID=$!
 
 cleanup() {
     kill -9 "$SERVER_PID" 2>/dev/null || true
-    rm -rf "$SERVE_DIR" "$WORK_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch test_update test_config_file test_interactive test_history
+    rm -rf "$SERVE_DIR" "$WORK_DIR" "$TEST_STATE_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch test_update test_config_file test_interactive test_history
 }
 trap cleanup EXIT
 

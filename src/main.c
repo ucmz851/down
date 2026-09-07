@@ -163,7 +163,13 @@ int down_execute_single(down_config_t *config, down_telemetry_t *external_telem,
         snprintf(resolved_filename, sizeof(resolved_filename), "%s", probe.suggested_filename);
     }
 
-    if (config->output_dir[0] != '\0') {
+    /* Strip leading "./" to ensure clean canonical filenames */
+    const char *clean_fname = resolved_filename;
+    while (clean_fname[0] == '.' && clean_fname[1] == '/') {
+        clean_fname += 2;
+    }
+
+    if (config->output_dir[0] != '\0' && strcmp(config->output_dir, ".") != 0 && strcmp(config->output_dir, "./") != 0) {
         if (make_directory_recursive(config->output_dir) != 0) {
             if (!is_swarm) {
                 fprintf(stderr, "[!] Error: failed to create destination directory '%s': %s\n",
@@ -176,13 +182,13 @@ int down_execute_single(down_config_t *config, down_telemetry_t *external_telem,
         if (rem < 1) rem = 1;
         if (config->output_dir[dlen - 1] == '/') {
             snprintf(config->output_path, sizeof(config->output_path), "%s%.*s",
-                     config->output_dir, rem, resolved_filename);
+                     config->output_dir, rem, clean_fname);
         } else {
             snprintf(config->output_path, sizeof(config->output_path), "%s/%.*s",
-                     config->output_dir, rem, resolved_filename);
+                     config->output_dir, rem, clean_fname);
         }
     } else {
-        snprintf(config->output_path, sizeof(config->output_path), "%s", resolved_filename);
+        snprintf(config->output_path, sizeof(config->output_path), "%s", clean_fname);
     }
 
     /* Check if control file exists for resume (.down first, fallback to .inlay) */
