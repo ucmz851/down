@@ -193,12 +193,39 @@ Configuration Mode:
       → Download immediately with optimized defaults to current directory
   [2] Advanced Setup
       → Customize destination, connection count, chunk size, speed limit, checksum
+  [3] View Download History
 
-? Select mode [1/2] (default: 1): 1
+? Select mode [1/2/3] (default: 1): 1
 ```
 
+- **Automatic Power-Outage / Crash Recovery**: If a download is interrupted by a power failure or connection drop, typing `down` and pressing Enter automatically detects the unfinished download and prompts you to resume it with 1 keystroke!
 - **Quick Start (`1` or Enter)**: Zero friction. Paste URL $\rightarrow$ press Enter $\rightarrow$ download starts immediately in the current folder with 4 parallel work-stealing workers.
 - **Advanced Setup (`2`)**: Interactively configure destination directory (with `~` expansion), custom filename, connection count, chunk size, speed throttling, and cryptographic checksum.
+- **View History (`3`)**: Displays interactive summary of recent completed and interrupted downloads.
+
+### Download History & Session Management
+
+Down automatically keeps a lightweight, zero-dependency history log in `$XDG_STATE_HOME/down/history.tsv`:
+
+```bash
+# View complete history of all downloads (completed, in-progress, resumable)
+down --history
+
+# Clear the history database
+down --clear-history
+```
+
+```text
+  ⚡ DOWN — Download History & Sessions
+──────────────────────────────────────────────────────────────────────────────────────────
+  Date/Time            Status        Progress          File / Source
+──────────────────────────────────────────────────────────────────────────────────────────
+  2026-09-07 09:26     COMPLETED     4.20 GB (100%)    ubuntu-24.04-desktop-amd64.iso
+                                     ↳ https://releases.ubuntu.com/...
+  2026-09-07 09:28     RESUMABLE     2.80 GB (66.7%)   debian-12.iso (.down state)
+                                     ↳ https://cdimage.debian.org/...
+──────────────────────────────────────────────────────────────────────────────────────────
+```
 
 ### Basic Downloads (CLI Flags)
 

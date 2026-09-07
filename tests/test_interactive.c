@@ -1,4 +1,6 @@
 #include "interactive.h"
+#include "history.h"
+#include "meta.h"
 #include "cli.h"
 #include <assert.h>
 #include <unistd.h>
@@ -22,10 +24,15 @@ static void set_simulated_stdin(const char *input) {
         exit(1);
     }
     close(fds[0]);
+    clearerr(stdin);
 }
 
 int main(void) {
     printf("[*] Running test_interactive...\n");
+
+    history_clear();
+    unlink("/tmp/test_wizard_resume.bin");
+    unlink("/tmp/test_wizard_resume.bin.down");
 
     /* Subtest 1: Quick Start Mode */
     {
@@ -93,6 +100,47 @@ int main(void) {
 
         int res = interactive_run_wizard(&config);
         assert(res == -1);
+    }
+
+    /* Subtest 5: Resume Interrupted Download Detection via Wizard */
+    {
+        /* Prepare interrupted download in history */
+        down_config_t rec;
+        memset(&rec, 0, sizeof(rec));
+        snprintf(rec.url, sizeof(rec.url), "https://archive.org/file_to_resume.bin");
+        snprintf(rec.output_path, sizeof(rec.output_path), "/tmp/test_wizard_resume.bin");
+        history_record_start(&rec, 5000000);
+        history_record_update(&rec, 2500000, 5000000, DOWN_STATUS_INTERRUPTED);
+
+        /* Create mock .down file */
+        char meta_path[1200];
+        snprintf(meta_path, sizeof(meta_path), "%s%s", rec.output_path, DOWN_META_EXT);
+        FILE *mf = fopen(meta_path, "wb");
+        assert(mf != NULL);
+        down_meta_hdr_t hdr;
+        memset(&hdr, 0, sizeof(hdr));
+        memcpy(hdr.magic, DOWN_META_MAGIC, DOWN_META_MAGIC_LEN);
+        hdr.file_size = 5000000;
+        hdr.chunk_size = 500000;
+        hdr.num_chunks = 10;
+        hdr.completed_chunks = 5;
+        fwrite(&hdr, 1, sizeof(hdr), mf);
+        fclose(mf);
+
+        /* Simulate pressing Enter (option 1: Resume) */
+        set_simulated_stdin("1\n");
+        down_config_t config;
+        memset(&config, 0, sizeof(config));
+
+        int res = interactive_run_wizard(&config);
+        assert(res == 0);
+        assert(strcmp(config.url, "https://archive.org/file_to_resume.bin") == 0);
+        assert(strcmp(config.output_path, "/tmp/test_wizard_resume.bin") == 0);
+        assert(config.resume_mode == true);
+
+        /* Cleanup */
+        history_clear();
+        unlink(meta_path);
     }
 
     printf("[+] test_interactive passed successfully!\n");

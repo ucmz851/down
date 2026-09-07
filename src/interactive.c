@@ -1,6 +1,7 @@
 #include "interactive.h"
 #include "cli.h"
 #include "checksum.h"
+#include "history.h"
 #include <ctype.h>
 
 static void trim_string(char *str) {
@@ -82,6 +83,137 @@ int interactive_run_wizard(down_config_t *config) {
     printf("%s  Interactive Setup Wizard%s\n", dim, reset);
     printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
 
+    int forced_mode = 0; /* 0: ask, 1: quick start, 2: advanced */
+
+    /* Check for interrupted / resumable downloads if no URL was given yet */
+    if (config->url[0] == '\0') {
+check_resumable: ;
+        down_history_entry_t resumable[10];
+        int res_count = history_load_resumable(resumable, 10);
+
+        if (res_count > 0) {
+            if (res_count == 1) {
+                char dl_str[32], tot_str[32];
+                format_bytes(resumable[0].downloaded_bytes, dl_str, sizeof(dl_str));
+                format_bytes(resumable[0].total_bytes, tot_str, sizeof(tot_str));
+
+                const char *base = strrchr(resumable[0].output_path, '/');
+                base = base ? (base + 1) : resumable[0].output_path;
+
+                printf("%s  ⚡ Found an interrupted / resumable download:%s\n", yellow, reset);
+                printf("    %sFile%s        : %s%s%s\n", bold, reset, cyan, base, reset);
+                printf("    %sProgress%s    : %s%.1f%%%s (%s / %s completed)\n",
+                       bold, reset, green, resumable[0].percent, reset, dl_str, tot_str);
+                printf("    %sSource URL%s  : %s\n", bold, reset, resumable[0].url);
+                printf("    %sSaved Path%s  : %s\n\n", bold, reset, resumable[0].output_path);
+
+                printf("%sWhat would you like to do?%s\n", bold, reset);
+                printf("  %s[1]%s %sResume '%s'%s %s(Recommended)%s\n", green, reset, bold, base, reset, dim, reset);
+                printf("  %s[2]%s Start a new download (Quick Start)\n", bold, reset);
+                printf("  %s[3]%s Advanced setup for new download\n", bold, reset);
+                printf("  %s[4]%s View all download history\n", dim, reset);
+                printf("  %s[5]%s Discard this resume state\n\n", dim, reset);
+
+                char res_buf[32];
+                char res_prompt[128];
+                snprintf(res_prompt, sizeof(res_prompt), "%s?%s Select option [1-5] %s(default: 1)%s: ",
+                         cyan, reset, dim, reset);
+                if (!prompt_input(res_prompt, res_buf, sizeof(res_buf), true)) {
+                    printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+                    return -1;
+                }
+
+                int rchoice = res_buf[0] ? atoi(res_buf) : 1;
+                if (rchoice == 1) {
+                    snprintf(config->url, sizeof(config->url), "%s", resumable[0].url);
+                    snprintf(config->output_path, sizeof(config->output_path), "%s", resumable[0].output_path);
+                    config->resume_mode = true;
+                    if (config->num_workers <= 0) config->num_workers = DEFAULT_NUM_WORKERS;
+
+                    printf("\n%s── Resuming Download ──────────────────────────────────────────%s\n", dim, reset);
+                    printf("  %sFile%s        : %s\n", bold, reset, config->output_path);
+                    printf("  %sSource%s      : %s\n", bold, reset, config->url);
+                    printf("  %sProgress%s    : %.1f%% (%s / %s)\n", bold, reset, resumable[0].percent, dl_str, tot_str);
+                    printf("  %sConnections%s : %d\n", bold, reset, config->num_workers);
+                    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+                    return 0;
+                } else if (rchoice == 2) {
+                    forced_mode = 1;
+                } else if (rchoice == 3) {
+                    forced_mode = 2;
+                } else if (rchoice == 4) {
+                    history_print_table();
+                    goto check_resumable;
+                } else if (rchoice == 5) {
+                    history_discard_resumable(resumable[0].output_path);
+                    printf("%s[+] Discarded resume state for '%s'%s\n\n", green, base, reset);
+                    goto check_resumable;
+                }
+            } else {
+                printf("%s  ⚡ Found %d interrupted / resumable downloads:%s\n", yellow, res_count, reset);
+                for (int i = 0; i < res_count; i++) {
+                    const char *base = strrchr(resumable[i].output_path, '/');
+                    base = base ? (base + 1) : resumable[i].output_path;
+                    char dl_str[32], tot_str[32];
+                    format_bytes(resumable[i].downloaded_bytes, dl_str, sizeof(dl_str));
+                    format_bytes(resumable[i].total_bytes, tot_str, sizeof(tot_str));
+                    printf("    [%d] %s%s%s — %.1f%% (%s / %s)\n",
+                           i + 1, bold, base, reset, resumable[i].percent, dl_str, tot_str);
+                }
+                int opt_new = res_count + 1;
+                int opt_adv = res_count + 2;
+                int opt_hist = res_count + 3;
+
+                printf("\n%sWhat would you like to do?%s\n", bold, reset);
+                for (int i = 0; i < res_count; i++) {
+                    const char *base = strrchr(resumable[i].output_path, '/');
+                    base = base ? (base + 1) : resumable[i].output_path;
+                    printf("  %s[%d]%s Resume '%s'\n", i == 0 ? green : bold, i + 1, reset, base);
+                }
+                printf("  %s[%d]%s Start a new download (Quick Start)\n", bold, opt_new, reset);
+                printf("  %s[%d]%s Advanced setup for new download\n", bold, opt_adv, reset);
+                printf("  %s[%d]%s View all download history\n\n", dim, opt_hist, reset);
+
+                char res_buf[32];
+                char res_prompt[128];
+                snprintf(res_prompt, sizeof(res_prompt), "%s?%s Select option [1-%d] %s(default: 1)%s: ",
+                         cyan, reset, opt_hist, dim, reset);
+                if (!prompt_input(res_prompt, res_buf, sizeof(res_buf), true)) {
+                    printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+                    return -1;
+                }
+
+                int sel = res_buf[0] ? atoi(res_buf) : 1;
+                if (sel >= 1 && sel <= res_count) {
+                    int pick = sel - 1;
+                    snprintf(config->url, sizeof(config->url), "%s", resumable[pick].url);
+                    snprintf(config->output_path, sizeof(config->output_path), "%s", resumable[pick].output_path);
+                    config->resume_mode = true;
+                    if (config->num_workers <= 0) config->num_workers = DEFAULT_NUM_WORKERS;
+
+                    char dl_str[32], tot_str[32];
+                    format_bytes(resumable[pick].downloaded_bytes, dl_str, sizeof(dl_str));
+                    format_bytes(resumable[pick].total_bytes, tot_str, sizeof(tot_str));
+
+                    printf("\n%s── Resuming Download ──────────────────────────────────────────%s\n", dim, reset);
+                    printf("  %sFile%s        : %s\n", bold, reset, config->output_path);
+                    printf("  %sSource%s      : %s\n", bold, reset, config->url);
+                    printf("  %sProgress%s    : %.1f%% (%s / %s)\n", bold, reset, resumable[pick].percent, dl_str, tot_str);
+                    printf("  %sConnections%s : %d\n", bold, reset, config->num_workers);
+                    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+                    return 0;
+                } else if (sel == opt_new) {
+                    forced_mode = 1;
+                } else if (sel == opt_adv) {
+                    forced_mode = 2;
+                } else if (sel == opt_hist) {
+                    history_print_table();
+                    goto check_resumable;
+                }
+            }
+        }
+    }
+
     /* Step 1: URL input (if not already specified) */
     if (config->url[0] == '\0') {
         char url_buf[1900];
@@ -106,23 +238,33 @@ int interactive_run_wizard(down_config_t *config) {
         printf("%s?%s %sTarget URL:%s %s%s%s\n", cyan, reset, bold, reset, cyan, config->url, reset);
     }
 
-    /* Step 2: Mode selection (Quick vs Advanced) */
-    printf("\n%sConfiguration Mode:%s\n", bold, reset);
-    printf("  %s[1]%s %sQuick Start (Recommended)%s\n", green, reset, bold, reset);
-    printf("      %s→ Download immediately with optimized defaults to current directory%s\n", dim, reset);
-    printf("  %s[2]%s %sAdvanced Setup%s\n", yellow, reset, bold, reset);
-    printf("      %s→ Customize destination, connection count, chunk size, speed limit, checksum%s\n\n", dim, reset);
+    /* Step 2: Mode selection (Quick vs Advanced vs History) */
+    int choice = forced_mode;
+    if (choice == 0) {
+prompt_mode: ;
+        printf("\n%sConfiguration Mode:%s\n", bold, reset);
+        printf("  %s[1]%s %sQuick Start (Recommended)%s\n", green, reset, bold, reset);
+        printf("      %s→ Download immediately with optimized defaults to current directory%s\n", dim, reset);
+        printf("  %s[2]%s %sAdvanced Setup%s\n", yellow, reset, bold, reset);
+        printf("      %s→ Customize destination, connection count, chunk size, speed limit, checksum%s\n", dim, reset);
+        printf("  %s[3]%s %sView Download History%s\n\n", dim, reset, bold, reset);
 
-    char mode_buf[32];
-    char mode_prompt[128];
-    snprintf(mode_prompt, sizeof(mode_prompt), "%s?%s Select mode [1/2] %s(default: 1)%s: ", cyan, reset, dim, reset);
+        char mode_buf[32];
+        char mode_prompt[128];
+        snprintf(mode_prompt, sizeof(mode_prompt), "%s?%s Select mode [1/2/3] %s(default: 1)%s: ", cyan, reset, dim, reset);
 
-    if (!prompt_input(mode_prompt, mode_buf, sizeof(mode_buf), true)) {
-        printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
-        return -1;
+        if (!prompt_input(mode_prompt, mode_buf, sizeof(mode_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+
+        if (mode_buf[0] == '3') {
+            history_print_table();
+            goto prompt_mode;
+        }
+
+        choice = (mode_buf[0] == '2') ? 2 : 1;
     }
-
-    int choice = (mode_buf[0] == '2') ? 2 : 1;
 
     if (choice == 1) {
         /* Quick Start: Ensure sensible defaults */

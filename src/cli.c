@@ -4,6 +4,7 @@
 #include "s3.h"
 #include "update.h"
 #include "config_file.h"
+#include "history.h"
 #include <getopt.h>
 #include <ctype.h>
 
@@ -96,7 +97,9 @@ void cli_print_usage(const char *prog_name) {
     printf("Arguments:\n");
     printf("  <URL>                      HTTP, HTTPS, or S3 (s3://) resource URL to download\n\n");
     printf("Modes & Wizards:\n");
-    printf("  -I, --interactive          Launch interactive guided setup wizard\n\n");
+    printf("  -I, --interactive          Launch interactive guided setup wizard\n");
+    printf("      --history              Display past download history and resumable sessions\n");
+    printf("      --clear-history        Delete download history database\n\n");
     printf("Target & Batch:\n");
     printf("  -o, --output <PATH>        Destination file name or path (default: auto-detected)\n");
     printf("  -d, --dir <DIRECTORY>      Destination folder (auto-created if nonexistent)\n");
@@ -235,6 +238,8 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
         {"verbose",       no_argument,       0, 'v'},
         {"update",        no_argument,       0, 1030},
         {"check-update",  no_argument,       0, 1031},
+        {"history",       no_argument,       0, 1040},
+        {"clear-history", no_argument,       0, 1041},
         {"interactive",   no_argument,       0, 'I'},
         {"version",       no_argument,       0, 'V'},
         {"help",          no_argument,       0, 'h'},
@@ -387,6 +392,13 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
             case 1031: /* --check-update */ {
                 int res = update_check_and_apply(false);
                 exit(res == 0 || res == 1 ? 0 : 1);
+            }
+            case 1040: /* --history */
+                history_print_table();
+                exit(0);
+            case 1041: /* --clear-history */ {
+                int res = history_clear();
+                exit(res == 0 ? 0 : 1);
             }
             case 'I':
                 config->interactive_mode = true;

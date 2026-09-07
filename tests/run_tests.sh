@@ -17,8 +17,9 @@ gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_ch
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_s3.c src/s3.c -o test_s3 -lcurl
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_batch.c src/batch.c -o test_batch
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_update.c src/update.c -o test_update -lcurl
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/telemetry.c -o test_config_file -lcurl -lcrypto -lpthread -lm
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_interactive.c src/interactive.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c -o test_interactive -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/history.c src/telemetry.c -o test_config_file -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_interactive.c src/interactive.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c -o test_interactive -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_history.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/interactive.c src/telemetry.c -o test_history -lcurl -lcrypto -lpthread -lm
 
 echo "[2/7] Running unit tests..."
 echo "  [*] test_storage (Positional I/O & fallocate)..."
@@ -39,6 +40,8 @@ echo "  [*] test_config_file (Config file parsing & CLI precedence)..."
 ./test_config_file
 echo "  [*] test_interactive (CLI wizard prompt & mode flows)..."
 ./test_interactive
+echo "  [*] test_history (Session history & crash recovery detection)..."
+./test_history
 
 echo "[3/7] Setting up mock HTTP server with Range and SigV4 support..."
 SERVE_DIR=$(mktemp -d /tmp/down_serve_XXXXXX)
@@ -58,7 +61,7 @@ SERVER_PID=$!
 
 cleanup() {
     kill -9 "$SERVER_PID" 2>/dev/null || true
-    rm -rf "$SERVE_DIR" "$WORK_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch test_update test_config_file test_interactive
+    rm -rf "$SERVE_DIR" "$WORK_DIR" test_storage test_meta test_scheduler test_checksum test_s3 test_batch test_update test_config_file test_interactive test_history
 }
 trap cleanup EXIT
 
@@ -209,6 +212,8 @@ echo "--- Test H: HTTP/3 (QUIC) Flag Configuration ---"
 echo "[+] HTTP/3 CLI options verified."
 
 echo "--- Test I: Interactive CLI Wizard Download ---"
+./down --clear-history >/dev/null 2>&1 || true
+rm -f "$WORK_DIR"/*.down "$WORK_DIR"/*.inlay
 printf "http://127.0.0.1:$PORT/data_4m.bin\n2\n$WORK_DIR\ninteractive_result.bin\n4\n256K\n\n\n" | ./down -I -q
 INT_HASH=$(sha256sum "$WORK_DIR/interactive_result.bin" | awk '{print $1}')
 if [ "$INT_HASH" != "$HASH_4M" ]; then
@@ -216,6 +221,30 @@ if [ "$INT_HASH" != "$HASH_4M" ]; then
     exit 1
 fi
 echo "[+] Interactive CLI wizard download verified (SHA-256: $INT_HASH)!"
+
+echo "--- Test J: Interactive Wizard Resume of Interrupted Download ---"
+# Start a 16MB download and pause it with SIGINT to simulate crash/interruption
+set +e
+./down "http://127.0.0.1:$PORT/data_16m.bin" -o "$WORK_DIR/wiz_resume.bin" -s 128K -n 4 >/dev/null 2>&1 &
+PAUSE_PID=$!
+for i in {1..50}; do
+    if [ -f "$WORK_DIR/wiz_resume.bin.down" ]; then
+        break
+    fi
+    sleep 0.01
+done
+kill -INT "$PAUSE_PID" 2>/dev/null || true
+wait "$PAUSE_PID" 2>/dev/null || true
+set -e
+
+# Interactive wizard detects resumable download; press Enter (option 1) to resume
+printf "1\n" | ./down -I -q
+WIZ_HASH=$(sha256sum "$WORK_DIR/wiz_resume.bin" | awk '{print $1}')
+if [ "$WIZ_HASH" != "$HASH_16M" ]; then
+    echo "[!] Hash mismatch on wizard resumed download!"
+    exit 1
+fi
+echo "[+] Interactive wizard resume verified (SHA-256: $WIZ_HASH)!"
 
 echo ""
 echo "=========================================================="

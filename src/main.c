@@ -9,6 +9,7 @@
 #include "checksum.h"
 #include "s3.h"
 #include "batch.h"
+#include "history.h"
 
 volatile sig_atomic_t g_shutdown_requested = 0;
 
@@ -193,6 +194,9 @@ static int execute_download(down_config_t *config) {
         return -1;
     }
 
+    /* Record start in history database */
+    history_record_start(config, probe.content_length);
+
     int download_ret = 0;
 
     /* Multi-worker ranged download path */
@@ -263,6 +267,7 @@ static int execute_download(down_config_t *config) {
                     }
                     meta_remove(&meta);
                     telemetry_print_complete(&telemetry, config->output_path);
+                    history_record_complete(config, probe.content_length);
                     download_ret = 0;
                 } else if (v_res == 1) {
                     fprintf(stderr, "\n[!] ERROR: Checksum mismatch for %s!\n", config->output_path);
@@ -281,16 +286,21 @@ static int execute_download(down_config_t *config) {
             } else {
                 meta_remove(&meta);
                 telemetry_print_complete(&telemetry, config->output_path);
+                history_record_complete(config, probe.content_length);
                 download_ret = 0;
             }
         } else if (g_shutdown_requested) {
             meta_sync(&meta, true);
             meta_close(&meta);
+            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
             telemetry_print_paused(&telemetry, config->output_path, meta_path, config->url);
             download_ret = -2;
         } else {
             meta_sync(&meta, true);
             meta_close(&meta);
+            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
             fprintf(stderr, "\n[!] Download incomplete due to network transfer error. Resume with -c.\n");
             download_ret = -1;
         }
@@ -322,6 +332,7 @@ static int execute_download(down_config_t *config) {
                         printf("[+] Checksum verified: %s: %s\n", config->checksum_algo, actual_hex);
                     }
                     telemetry_print_complete(&telemetry, config->output_path);
+                    history_record_complete(config, probe.content_length);
                     download_ret = 0;
                 } else if (v_res == 1) {
                     fprintf(stderr, "\n[!] ERROR: Checksum mismatch for %s!\n", config->output_path);
@@ -335,12 +346,17 @@ static int execute_download(down_config_t *config) {
                 }
             } else {
                 telemetry_print_complete(&telemetry, config->output_path);
+                history_record_complete(config, probe.content_length);
                 download_ret = 0;
             }
         } else if (g_shutdown_requested) {
+            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
             printf("\n[!] Single stream download aborted by user.\n");
             download_ret = -2;
         } else {
+            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            history_record_update(config, cur, probe.content_length, DOWN_STATUS_FAILED);
             fprintf(stderr, "\n[!] Single stream download failed.\n");
             download_ret = -1;
         }
