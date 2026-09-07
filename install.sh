@@ -58,12 +58,21 @@ ASCII
 # ── Handle Uninstallation Flag ───────────────────────────────────────────────
 if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
     print_banner
+    PURGE=0
+    for arg in "$@"; do
+        if [ "$arg" = "--purge" ] || [ "$arg" = "-p" ]; then
+            PURGE=1
+        fi
+    done
+
     echo -e "${C_BOLD}🗑️  Uninstalling Down...${C_RESET}\n"
     CANDIDATES=(
         "$(command -v down 2>/dev/null || true)"
         "/usr/local/bin/down"
         "${HOME}/.local/bin/down"
         "/usr/bin/down"
+        "$(command -v down-dev 2>/dev/null || true)"
+        "${HOME}/.local/bin/down-dev"
         "$(command -v inlay 2>/dev/null || true)"
         "/usr/local/bin/inlay"
         "${HOME}/.local/bin/inlay"
@@ -91,6 +100,23 @@ if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
             fi
         fi
     done
+
+    STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/down"
+    CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/down"
+    if [ "$PURGE" -eq 1 ]; then
+        if [ -d "$STATE_DIR" ]; then
+            rm -rf "$STATE_DIR"
+            echo -e "  ${C_GREEN}✔ Purged history and session state at ${STATE_DIR}${C_RESET}"
+        fi
+        if [ -d "$CONFIG_DIR" ]; then
+            rm -rf "$CONFIG_DIR"
+            echo -e "  ${C_GREEN}✔ Purged configuration directory at ${CONFIG_DIR}${C_RESET}"
+        fi
+        [ -f "${HOME}/.downrc" ] && rm -f "${HOME}/.downrc" && echo -e "  ${C_GREEN}✔ Removed ${HOME}/.downrc${C_RESET}"
+    elif [ -d "$STATE_DIR" ]; then
+        echo -e "  ${C_MUTED}Note: Download history at ${STATE_DIR} preserved. (Pass --purge to remove)${C_RESET}"
+    fi
+
     if [ "$REMOVED" -gt 0 ]; then
         echo -e "\n${C_GREEN}${C_BOLD}✔ Down has been completely removed from your system.${C_RESET}\n"
     else
@@ -217,6 +243,16 @@ if [ "$OS" = "linux" ] && [ "$NORM_ARCH" = "amd64" ]; then
     fi
 fi
 
+# Prefer local build if running from cloned repository
+if [ "$INSTALLED" -eq 0 ] && [ -f "./Makefile" ] && [ -f "./src/main.c" ]; then
+    echo -e "  ${C_MUTED}Detected local repository checkout. Compiling...${C_RESET}"
+    make -j"$(nproc 2>/dev/null || echo 2)" >/dev/null
+    if [ -f "./down" ] && [ -x "./down" ]; then
+        cp "./down" "${TMP_DIR}/down"
+        INSTALLED=1
+    fi
+fi
+
 # Fallback: Compile from Source
 if [ "$INSTALLED" -eq 0 ]; then
     echo -e "  ${C_YELLOW}• Pre-built binary unavailable for ${OS}/${ARCH}. Building from source...${C_RESET}"
@@ -304,9 +340,11 @@ if ! echo "$PATH" | tr ':' '\n' | grep -qx "$TARGET_DIR"; then
 fi
 
 echo -e "  ${C_BOLD}✦ Quick Start:${C_RESET}"
-echo -e "    down https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso"
+echo -e "    ${C_CYAN}down${C_RESET}                    Launch guided interactive setup wizard"
+echo -e "    ${C_CYAN}down <URL>${C_RESET}              Direct high-speed multi-connection download"
+echo -e "    ${C_CYAN}down -j 2 <URL1> <URL2>${C_RESET} Parallel concurrent download swarm"
 echo -e "\n  ${C_BOLD}✦ Useful Commands:${C_RESET}"
-echo -e "    ${C_MUTED}down --help${C_RESET}          Full documentation of flags & protocols"
-echo -e "    ${C_MUTED}down --check-update${C_RESET}  Check for new releases on GitHub"
-echo -e "    ${C_MUTED}down --update${C_RESET}        Self-update in-place to latest version\n"
+echo -e "    ${C_MUTED}down --history${C_RESET}        View download history & resumable sessions"
+echo -e "    ${C_MUTED}down --help${C_RESET}           Full documentation of flags & protocols"
+echo -e "    ${C_MUTED}down --update${C_RESET}         Self-update in-place to latest version\n"
 

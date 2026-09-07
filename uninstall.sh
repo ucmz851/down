@@ -51,12 +51,21 @@ echo -e "${C_BOLD}  🗑️  Down Automated Uninstaller${C_RESET}"
 echo -e "  ${C_MUTED}Crafted by ${C_RESET}${C_PURPLE}${C_BOLD}${AUTHOR}${C_RESET}"
 echo -e "  ${C_BLUE}https://github.com/${REPO}${C_RESET}\n"
 
+PURGE=0
+for arg in "$@"; do
+    if [ "$arg" = "--purge" ] || [ "$arg" = "-p" ]; then
+        PURGE=1
+    fi
+done
+
 # Search for candidate installation paths
 CANDIDATES=(
     "$(command -v down 2>/dev/null || true)"
     "/usr/local/bin/down"
     "${HOME}/.local/bin/down"
     "/usr/bin/down"
+    "$(command -v down-dev 2>/dev/null || true)"
+    "${HOME}/.local/bin/down-dev"
     "$(command -v inlay 2>/dev/null || true)"
     "/usr/local/bin/inlay"
     "${HOME}/.local/bin/inlay"
@@ -89,6 +98,22 @@ for target in "${CANDIDATES[@]}"; do
         fi
     fi
 done
+
+STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/down"
+CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/down"
+if [ "$PURGE" -eq 1 ]; then
+    if [ -d "$STATE_DIR" ]; then
+        rm -rf "$STATE_DIR"
+        echo -e "  ${C_GREEN}✔ Purged history and session state at ${STATE_DIR}${C_RESET}"
+    fi
+    if [ -d "$CONFIG_DIR" ]; then
+        rm -rf "$CONFIG_DIR"
+        echo -e "  ${C_GREEN}✔ Purged configuration directory at ${CONFIG_DIR}${C_RESET}"
+    fi
+    [ -f "${HOME}/.downrc" ] && rm -f "${HOME}/.downrc" && echo -e "  ${C_GREEN}✔ Removed ${HOME}/.downrc${C_RESET}"
+elif [ -d "$STATE_DIR" ]; then
+    echo -e "  ${C_MUTED}Note: Download history at ${STATE_DIR} preserved. (Pass --purge to remove)${C_RESET}"
+fi
 
 if [ "$REMOVED" -gt 0 ]; then
     echo -e "\n${C_GREEN}${C_BOLD}✔ Down has been completely removed from your system.${C_RESET}\n"
