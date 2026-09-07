@@ -1,4 +1,5 @@
 #include "cli.h"
+#include "interactive.h"
 #include "checksum.h"
 #include "s3.h"
 #include "update.h"
@@ -94,6 +95,8 @@ void cli_print_usage(const char *prog_name) {
     printf("High-performance segmented download engine with zero-assembly positional I/O.\n\n");
     printf("Arguments:\n");
     printf("  <URL>                      HTTP, HTTPS, or S3 (s3://) resource URL to download\n\n");
+    printf("Modes & Wizards:\n");
+    printf("  -I, --interactive          Launch interactive guided setup wizard\n\n");
     printf("Target & Batch:\n");
     printf("  -o, --output <PATH>        Destination file name or path (default: auto-detected)\n");
     printf("  -d, --dir <DIRECTORY>      Destination folder (auto-created if nonexistent)\n");
@@ -232,6 +235,7 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
         {"verbose",       no_argument,       0, 'v'},
         {"update",        no_argument,       0, 1030},
         {"check-update",  no_argument,       0, 1031},
+        {"interactive",   no_argument,       0, 'I'},
         {"version",       no_argument,       0, 'V'},
         {"help",          no_argument,       0, 'h'},
         {0, 0, 0, 0}
@@ -239,7 +243,7 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "o:d:n:s:ct:r:H:U:k46i:C:qvVh", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:d:n:s:ct:r:H:U:k46i:C:IqvVh", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'o':
                 snprintf(config->output_path, sizeof(config->output_path), "%s", optarg);
@@ -384,6 +388,9 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
                 int res = update_check_and_apply(false);
                 exit(res == 0 || res == 1 ? 0 : 1);
             }
+            case 'I':
+                config->interactive_mode = true;
+                break;
             case 'V':
                 cli_print_version();
                 exit(0);
@@ -400,8 +407,13 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
         snprintf(config->url, sizeof(config->url), "%s", argv[optind]);
     }
 
-    if (config->url[0] == '\0' && config->input_file[0] == '\0') {
-        fprintf(stderr, "[!] Error: URL argument or -i/--input-file is required\n\n");
+    /* Trigger interactive wizard if explicitly requested (-I) or if run without URL/input-file in a TTY */
+    if (config->interactive_mode || (config->url[0] == '\0' && config->input_file[0] == '\0' && isatty(STDIN_FILENO))) {
+        if (interactive_run_wizard(config) != 0) {
+            return -1;
+        }
+    } else if (config->url[0] == '\0' && config->input_file[0] == '\0') {
+        fprintf(stderr, "[!] Error: URL argument, -i/--input-file, or interactive terminal is required\n\n");
         cli_print_usage(argv[0]);
         return -1;
     }

@@ -169,7 +169,38 @@ rm -f "$(command -v down)"
 
 ## Usage & Examples
 
-### Basic Downloads
+### Interactive Wizard Mode (Beginner-Friendly)
+
+If you run `down` without arguments in an interactive terminal, or pass `-I` / `--interactive`, Down launches a clean, guided interactive wizard:
+
+```bash
+# Simply type down and press Enter:
+down
+
+# Or explicitly launch the wizard:
+down -I
+```
+
+```text
+  ⚡ DOWN — High-Performance Download Manager
+  Interactive Setup Wizard
+─────────────────────────────────────────────────────────────────
+
+? Enter download URL: https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+
+Configuration Mode:
+  [1] Quick Start (Recommended)
+      → Download immediately with optimized defaults to current directory
+  [2] Advanced Setup
+      → Customize destination, connection count, chunk size, speed limit, checksum
+
+? Select mode [1/2] (default: 1): 1
+```
+
+- **Quick Start (`1` or Enter)**: Zero friction. Paste URL $\rightarrow$ press Enter $\rightarrow$ download starts immediately in the current folder with 4 parallel work-stealing workers.
+- **Advanced Setup (`2`)**: Interactively configure destination directory (with `~` expansion), custom filename, connection count, chunk size, speed throttling, and cryptographic checksum.
+
+### Basic Downloads (CLI Flags)
 
 ```bash
 # Download a file (filename inferred from URL)

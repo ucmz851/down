@@ -54,6 +54,7 @@ typedef struct {
     bool use_static;
     bool insecure;
     bool no_color;
+    bool interactive_mode;
     long ip_version; /* CURL_IPRESOLVE_WHATEVER / V4 / V6 */
     long http_version; /* 0, CURL_HTTP_VERSION_3, CURL_HTTP_VERSION_3ONLY */
 

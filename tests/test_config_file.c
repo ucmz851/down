@@ -5,6 +5,8 @@
 #include <string.h>
 #include <unistd.h>
 
+volatile sig_atomic_t g_shutdown_requested = 0;
+
 void test_config_set_option(void) {
     down_config_t config;
     memset(&config, 0, sizeof(config));

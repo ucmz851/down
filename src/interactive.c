@@ -1,0 +1,259 @@
+#include "interactive.h"
+#include "cli.h"
+#include "checksum.h"
+#include <ctype.h>
+
+static void trim_string(char *str) {
+    if (!str) return;
+
+    /* Trim leading whitespace and quotes */
+    char *start = str;
+    while (*start && (isspace((unsigned char)*start) || *start == '"' || *start == '\'')) {
+        start++;
+    }
+
+    /* Trim trailing whitespace and quotes */
+    size_t len = strlen(start);
+    char *end = start + len;
+    while (end > start && (isspace((unsigned char)*(end - 1)) || *(end - 1) == '"' || *(end - 1) == '\'')) {
+        end--;
+    }
+    *end = '\0';
+
+    if (start != str) {
+        memmove(str, start, (size_t)(end - start + 1));
+    }
+}
+
+static bool prompt_input(const char *prompt_str, char *buf, size_t sz, bool allow_empty) {
+    if (!buf || sz == 0) return false;
+
+    while (true) {
+        if (g_shutdown_requested) return false;
+
+        printf("%s", prompt_str);
+        fflush(stdout);
+
+        if (!fgets(buf, (int)sz, stdin)) {
+            /* EOF or read error */
+            return false;
+        }
+
+        if (g_shutdown_requested) return false;
+
+        trim_string(buf);
+
+        if (buf[0] == '\0') {
+            if (allow_empty) return true;
+            printf("  [!] Input cannot be empty. Please try again (or press Ctrl+C to abort).\n");
+            continue;
+        }
+
+        return true;
+    }
+}
+
+static void expand_path_tilde(const char *path, char *out, size_t out_sz) {
+    if (!path || !out || out_sz == 0) return;
+
+    if (path[0] == '~' && (path[1] == '/' || path[1] == '\0')) {
+        const char *home = getenv("HOME");
+        if (home) {
+            snprintf(out, out_sz, "%s%s", home, path + 1);
+            return;
+        }
+    }
+    snprintf(out, out_sz, "%s", path);
+}
+
+int interactive_run_wizard(down_config_t *config) {
+    if (!config) return -1;
+
+    bool color = isatty(STDOUT_FILENO) && !getenv("NO_COLOR");
+    const char *cyan = color ? "\033[1;36m" : "";
+    const char *green = color ? "\033[1;32m" : "";
+    const char *yellow = color ? "\033[1;33m" : "";
+    const char *dim = color ? "\033[38;5;244m" : "";
+    const char *bold = color ? "\033[1m" : "";
+    const char *reset = color ? "\033[0m" : "";
+
+    printf("\n");
+    printf("%s  ⚡ DOWN — High-Performance Download Manager%s\n", cyan, reset);
+    printf("%s  Interactive Setup Wizard%s\n", dim, reset);
+    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+
+    /* Step 1: URL input (if not already specified) */
+    if (config->url[0] == '\0') {
+        char url_buf[1900];
+        char prompt[128];
+        snprintf(prompt, sizeof(prompt), "%s?%s %sEnter download URL:%s ", cyan, reset, bold, reset);
+
+        if (!prompt_input(prompt, url_buf, sizeof(url_buf), false)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+
+        /* Auto-prepend https:// if protocol scheme is omitted */
+        if (strncmp(url_buf, "http://", 7) != 0 &&
+            strncmp(url_buf, "https://", 8) != 0 &&
+            strncmp(url_buf, "s3://", 5) != 0 &&
+            strncmp(url_buf, "s3a://", 6) != 0) {
+            snprintf(config->url, sizeof(config->url), "https://%s", url_buf);
+        } else {
+            snprintf(config->url, sizeof(config->url), "%s", url_buf);
+        }
+    } else {
+        printf("%s?%s %sTarget URL:%s %s%s%s\n", cyan, reset, bold, reset, cyan, config->url, reset);
+    }
+
+    /* Step 2: Mode selection (Quick vs Advanced) */
+    printf("\n%sConfiguration Mode:%s\n", bold, reset);
+    printf("  %s[1]%s %sQuick Start (Recommended)%s\n", green, reset, bold, reset);
+    printf("      %s→ Download immediately with optimized defaults to current directory%s\n", dim, reset);
+    printf("  %s[2]%s %sAdvanced Setup%s\n", yellow, reset, bold, reset);
+    printf("      %s→ Customize destination, connection count, chunk size, speed limit, checksum%s\n\n", dim, reset);
+
+    char mode_buf[32];
+    char mode_prompt[128];
+    snprintf(mode_prompt, sizeof(mode_prompt), "%s?%s Select mode [1/2] %s(default: 1)%s: ", cyan, reset, dim, reset);
+
+    if (!prompt_input(mode_prompt, mode_buf, sizeof(mode_buf), true)) {
+        printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+        return -1;
+    }
+
+    int choice = (mode_buf[0] == '2') ? 2 : 1;
+
+    if (choice == 1) {
+        /* Quick Start: Ensure sensible defaults */
+        if (config->output_dir[0] == '\0' && config->output_path[0] == '\0') {
+            snprintf(config->output_dir, sizeof(config->output_dir), ".");
+        }
+        if (config->num_workers <= 0) {
+            config->num_workers = DEFAULT_NUM_WORKERS;
+        }
+    } else {
+        /* Advanced Setup */
+        printf("\n%s── Advanced Settings ──────────────────────────────────────────%s\n", dim, reset);
+
+        /* Destination directory */
+        char dir_buf[512];
+        char dir_prompt[128];
+        snprintf(dir_prompt, sizeof(dir_prompt), "  %sDestination directory%s %s[default: .]%s: ",
+                 bold, reset, dim, reset);
+        if (!prompt_input(dir_prompt, dir_buf, sizeof(dir_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (dir_buf[0] != '\0') {
+            expand_path_tilde(dir_buf, config->output_dir, sizeof(config->output_dir));
+        } else if (config->output_dir[0] == '\0') {
+            snprintf(config->output_dir, sizeof(config->output_dir), ".");
+        }
+
+        /* Custom filename */
+        char name_buf[512];
+        char name_prompt[128];
+        snprintf(name_prompt, sizeof(name_prompt), "  %sCustom filename%s %s[leave blank for auto-detect]%s: ",
+                 bold, reset, dim, reset);
+        if (!prompt_input(name_prompt, name_buf, sizeof(name_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (name_buf[0] != '\0') {
+            snprintf(config->output_path, sizeof(config->output_path), "%s", name_buf);
+        }
+
+        /* Number of parallel connections */
+        char conn_buf[32];
+        char conn_prompt[128];
+        int def_conn = config->num_workers > 0 ? config->num_workers : DEFAULT_NUM_WORKERS;
+        snprintf(conn_prompt, sizeof(conn_prompt), "  %sParallel connections (1-64)%s %s[default: %d]%s: ",
+                 bold, reset, dim, def_conn, reset);
+        if (!prompt_input(conn_prompt, conn_buf, sizeof(conn_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (conn_buf[0] != '\0') {
+            int n = atoi(conn_buf);
+            if (n >= 1 && n <= MAX_NUM_WORKERS) {
+                config->num_workers = n;
+            } else {
+                printf("  %s[!] Value must be 1-%d. Using default %d.%s\n", yellow, MAX_NUM_WORKERS, def_conn, reset);
+                config->num_workers = def_conn;
+            }
+        } else {
+            config->num_workers = def_conn;
+        }
+
+        /* Chunk size */
+        char chunk_buf[32];
+        char chunk_prompt[128];
+        snprintf(chunk_prompt, sizeof(chunk_prompt), "  %sChunk size (e.g. 256K, 512K, 1M)%s %s[default: 512K]%s: ",
+                 bold, reset, dim, reset);
+        if (!prompt_input(chunk_prompt, chunk_buf, sizeof(chunk_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (chunk_buf[0] != '\0') {
+            uint32_t sz = parse_size_string(chunk_buf);
+            if (sz >= MIN_CHUNK_SIZE && sz <= MAX_CHUNK_SIZE) {
+                config->chunk_size = sz;
+            } else {
+                printf("  %s[!] Chunk size must be between 64K and 32M. Using 512K.%s\n", yellow, reset);
+                config->chunk_size = DEFAULT_CHUNK_SIZE;
+            }
+        }
+
+        /* Bandwidth rate limit */
+        char speed_buf[32];
+        char speed_prompt[128];
+        snprintf(speed_prompt, sizeof(speed_prompt), "  %sSpeed limit (e.g. 500K, 2M, 10M)%s %s[default: unlimited]%s: ",
+                 bold, reset, dim, reset);
+        if (!prompt_input(speed_prompt, speed_buf, sizeof(speed_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (speed_buf[0] != '\0') {
+            config->max_speed_limit = parse_speed_string(speed_buf);
+        }
+
+        /* Checksum verification */
+        char csum_buf[256];
+        char csum_prompt[128];
+        snprintf(csum_prompt, sizeof(csum_prompt), "  %sChecksum verification (<algo>:<hex>)%s %s[default: none]%s: ",
+                 bold, reset, dim, reset);
+        if (!prompt_input(csum_prompt, csum_buf, sizeof(csum_buf), true)) {
+            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+            return -1;
+        }
+        if (csum_buf[0] != '\0') {
+            if (checksum_parse_spec(csum_buf, config->checksum_algo, sizeof(config->checksum_algo),
+                                    config->expected_checksum, sizeof(config->expected_checksum)) == 0) {
+                snprintf(config->checksum_spec, sizeof(config->checksum_spec), "%s", csum_buf);
+            } else {
+                printf("  %s[!] Invalid checksum specification format. Checksum verification skipped.%s\n", yellow, reset);
+            }
+        }
+    }
+
+    /* Print confirmation summary */
+    printf("\n%s── Ready to Download ──────────────────────────────────────────%s\n", dim, reset);
+    printf("  %sURL%s         : %s\n", bold, reset, config->url);
+    if (config->output_path[0] != '\0') {
+        printf("  %sFile%s        : %s\n", bold, reset, config->output_path);
+    }
+    printf("  %sDirectory%s   : %s\n", bold, reset, config->output_dir[0] ? config->output_dir : ".");
+    printf("  %sConnections%s : %d\n", bold, reset, config->num_workers);
+    if (config->max_speed_limit > 0) {
+        char spd[32];
+        format_bytes(config->max_speed_limit, spd, sizeof(spd));
+        printf("  %sRate Limit%s  : %s/s\n", bold, reset, spd);
+    }
+    if (config->checksum_spec[0] != '\0') {
+        printf("  %sChecksum%s    : %s\n", bold, reset, config->checksum_spec);
+    }
+    printf("%s─────────────────────────────────────────────────────────────────%s\n\n", dim, reset);
+
+    return 0;
+}
