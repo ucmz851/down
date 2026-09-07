@@ -251,7 +251,7 @@ echo "[+] Interactive CLI wizard download verified (SHA-256: $INT_HASH)!"
 echo "--- Test J: Interactive Wizard Resume of Interrupted Download ---"
 # Start a 16MB download and pause it with SIGINT to simulate crash/interruption
 set +e
-./down "http://127.0.0.1:$PORT/data_16m.bin" -o "$WORK_DIR/wiz_resume.bin" -s 128K -n 4 >/dev/null 2>&1 &
+./down -r 500K "http://127.0.0.1:$PORT/data_16m.bin" -o "$WORK_DIR/wiz_resume.bin" -s 128K -n 4 >/dev/null 2>&1 &
 PAUSE_PID=$!
 for i in {1..50}; do
     if [ -f "$WORK_DIR/wiz_resume.bin.down" ]; then
