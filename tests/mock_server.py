@@ -114,6 +114,11 @@ def main():
     serve_dir = os.path.abspath(sys.argv[1])
     port = int(sys.argv[2])
 
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(line_buffering=True)
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(line_buffering=True)
+
     server = ThreadingHTTPServer(("127.0.0.1", port), RangeHTTPRequestHandler)
     server.serve_dir = serve_dir
     actual_port = server.server_port

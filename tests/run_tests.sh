@@ -73,16 +73,16 @@ echo "[3/7] Setting up mock HTTP server with Range and SigV4 support..."
 SERVE_DIR=$(mktemp -d /tmp/down_serve_XXXXXX)
 WORK_DIR=$(mktemp -d /tmp/down_work_XXXXXX)
 
-# Generate test random files
-head -c 4194304 /dev/urandom > "$SERVE_DIR/data_4m.bin"
-head -c 8388608 /dev/urandom > "$SERVE_DIR/data_8m.bin"
-head -c 16777216 /dev/urandom > "$SERVE_DIR/data_16m.bin"
+# Generate test random files with portable dd
+dd if=/dev/urandom of="$SERVE_DIR/data_4m.bin" bs=1048576 count=4 2>/dev/null
+dd if=/dev/urandom of="$SERVE_DIR/data_8m.bin" bs=1048576 count=8 2>/dev/null
+dd if=/dev/urandom of="$SERVE_DIR/data_16m.bin" bs=1048576 count=16 2>/dev/null
 HASH_4M=$(calc_sha256 "$SERVE_DIR/data_4m.bin")
 HASH_8M=$(calc_sha256 "$SERVE_DIR/data_8m.bin")
 HASH_16M=$(calc_sha256 "$SERVE_DIR/data_16m.bin")
 
-# Start mock HTTP server
-python3 tests/mock_server.py "$SERVE_DIR" 0 > "$WORK_DIR/server.log" 2>&1 &
+# Start mock HTTP server with unbuffered I/O
+python3 -u tests/mock_server.py "$SERVE_DIR" 0 > "$WORK_DIR/server.log" 2>&1 &
 SERVER_PID=$!
 
 cleanup() {
@@ -91,9 +91,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Wait for server to become ready
+# Wait for server to become ready (up to 15 seconds)
 PORT=""
-for i in {1..50}; do
+for i in {1..150}; do
     if grep -q "READY" "$WORK_DIR/server.log" 2>/dev/null; then
         PORT=$(grep "READY" "$WORK_DIR/server.log" | awk '{print $2}')
         break
@@ -102,8 +102,8 @@ for i in {1..50}; do
 done
 
 if [ -z "$PORT" ]; then
-    echo "[!] Mock server failed to start"
-    cat "$WORK_DIR/server.log"
+    echo "[!] Mock server failed to start (timeout). Server log:"
+    cat "$WORK_DIR/server.log" 2>/dev/null || true
     exit 1
 fi
 echo "[+] Mock HTTP server running on port $PORT"

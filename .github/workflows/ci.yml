@@ -18,8 +18,8 @@ jobs:
             platform: linux
           - os: macos-latest
             platform: macos-arm64
-          - os: macos-13
-            platform: macos-x86_64
+          - os: macos-15
+            platform: macos-15-arm64
 
     steps:
       - name: Checkout code
