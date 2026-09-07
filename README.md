@@ -186,7 +186,7 @@ down -I
   Interactive Setup Wizard
 ─────────────────────────────────────────────────────────────────
 
-? Enter download URL: https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
+? Enter download URL(s): https://releases.ubuntu.com/noble/ubuntu-24.04-desktop-amd64.iso
 
 Configuration Mode:
   [1] Quick Start (Recommended)
@@ -198,8 +198,9 @@ Configuration Mode:
 ? Select mode [1/2/3] (default: 1): 1
 ```
 
-- **Automatic Power-Outage / Crash Recovery**: If a download is interrupted by a power failure or connection drop, typing `down` and pressing Enter automatically detects the unfinished download and prompts you to resume it with 1 keystroke!
-- **Quick Start (`1` or Enter)**: Zero friction. Paste URL $\rightarrow$ press Enter $\rightarrow$ download starts immediately in the current folder with 4 parallel work-stealing workers.
+- **Single or Multiple URLs**: Paste a single link or multiple links separated by spaces to download multiple files in parallel slots.
+- **Automatic Power-Outage / Crash Recovery**: If one or more downloads are interrupted by a power failure or connection drop, typing `down` and pressing Enter automatically detects unfinished downloads and lets you resume all of them concurrently in parallel slots!
+- **Quick Start (`1` or Enter)**: Zero friction. Paste URL(s) $\rightarrow$ press Enter $\rightarrow$ download starts immediately in the current folder with 4 parallel work-stealing workers.
 - **Advanced Setup (`2`)**: Interactively configure destination directory (with `~` expansion), custom filename, connection count, chunk size, speed throttling, and cryptographic checksum.
 - **View History (`3`)**: Displays interactive summary of recent completed and interrupted downloads.
 
@@ -295,6 +296,15 @@ down -C sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 
 
 # Auto-detected by hex digest length (64 hex chars -> SHA-256)
 down -C e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 https://example.com/data.iso
+```
+
+### Parallel Multi-Download Swarm (`-j, --concurrent`)
+
+Download multiple files simultaneously with independent worker pools and a live stacked telemetry dashboard:
+
+```bash
+# Download 3 URLs with 2 concurrent file slots and 4 connections per file:
+down -j 2 https://example.com/file1.iso https://example.com/file2.iso https://example.com/file3.iso
 ```
 
 ### Batch URL Queue (`-i, --input-file`)
