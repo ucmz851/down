@@ -32,7 +32,7 @@ void format_bytes(uint64_t bytes, char *buf, size_t buf_size) {
     }
 }
 
-static void format_speed(double speed, char *buf, size_t buf_size) {
+void format_speed(double speed, char *buf, size_t buf_size) {
     static const char *units[] = {"B/s", "KB/s", "MB/s", "GB/s", "TB/s"};
     int unit_idx = 0;
     while (speed >= 1024.0 && unit_idx < 4) {

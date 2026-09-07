@@ -3,7 +3,7 @@
 
 #include "down.h"
 
-typedef struct {
+typedef struct down_telemetry_t {
     _Atomic uint64_t total_size;
     _Atomic uint64_t downloaded_bytes;
     _Atomic uint64_t initial_bytes;
@@ -32,6 +32,9 @@ void telemetry_print_complete(const down_telemetry_t *telem, const char *filepat
 /* Print clean summary card upon pause/interruption */
 void telemetry_print_paused(const down_telemetry_t *telem, const char *filepath,
                             const char *meta_path, const char *url);
+
+/* Format transfer speed (e.g., 14.50 MB/s) */
+void format_speed(double speed, char *buf, size_t buf_size);
 
 /* Format duration (e.g., 01m 24s or 45s) */
 void format_duration(uint64_t seconds, char *buf, size_t buf_size);

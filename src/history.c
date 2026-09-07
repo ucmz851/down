@@ -2,6 +2,9 @@
 #include "meta.h"
 #include <time.h>
 #include <sys/file.h>
+#include <pthread.h>
+
+static pthread_mutex_t g_history_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void get_current_timestamp(char *buf, size_t sz) {
     if (!buf || sz == 0) return;
@@ -216,6 +219,7 @@ int history_load_resumable(down_history_entry_t *entries, int max_entries) {
 int history_record_start(const down_config_t *config, uint64_t total_bytes) {
     if (!config || config->output_path[0] == '\0') return -1;
 
+    pthread_mutex_lock(&g_history_mutex);
     down_history_entry_t entries[MAX_HISTORY_ENTRIES];
     int count = history_load_all(entries, MAX_HISTORY_ENTRIES - 1);
 
@@ -249,12 +253,15 @@ int history_record_start(const down_config_t *config, uint64_t total_bytes) {
         count++;
     }
 
-    return save_entries(entries, count);
+    int ret = save_entries(entries, count);
+    pthread_mutex_unlock(&g_history_mutex);
+    return ret;
 }
 
 int history_record_update(const down_config_t *config, uint64_t downloaded, uint64_t total, down_status_t status) {
     if (!config || config->output_path[0] == '\0') return -1;
 
+    pthread_mutex_lock(&g_history_mutex);
     down_history_entry_t entries[MAX_HISTORY_ENTRIES];
     int count = history_load_all(entries, MAX_HISTORY_ENTRIES);
 
@@ -287,7 +294,9 @@ int history_record_update(const down_config_t *config, uint64_t downloaded, uint
         count++;
     }
 
-    return save_entries(entries, count);
+    int ret = save_entries(entries, count);
+    pthread_mutex_unlock(&g_history_mutex);
+    return ret;
 }
 
 int history_record_complete(const down_config_t *config, uint64_t total_bytes) {
@@ -303,6 +312,7 @@ int history_discard_resumable(const char *output_path) {
     snprintf(meta_path, sizeof(meta_path), "%s%s", output_path, INLAY_META_EXT);
     unlink(meta_path);
 
+    pthread_mutex_lock(&g_history_mutex);
     /* Update history entry status */
     down_history_entry_t entries[MAX_HISTORY_ENTRIES];
     int count = history_load_all(entries, MAX_HISTORY_ENTRIES);
@@ -315,7 +325,9 @@ int history_discard_resumable(const char *output_path) {
         }
     }
 
-    return save_entries(entries, count);
+    int ret = save_entries(entries, count);
+    pthread_mutex_unlock(&g_history_mutex);
+    return ret;
 }
 
 void history_print_table(void) {
@@ -392,16 +404,23 @@ void history_print_table(void) {
 }
 
 int history_clear(void) {
+    pthread_mutex_lock(&g_history_mutex);
     char path[1024];
-    if (history_get_path(path, sizeof(path)) != 0) return -1;
+    if (history_get_path(path, sizeof(path)) != 0) {
+        pthread_mutex_unlock(&g_history_mutex);
+        return -1;
+    }
     if (unlink(path) == 0) {
         printf("[+] Download history cleared successfully.\n");
+        pthread_mutex_unlock(&g_history_mutex);
         return 0;
     }
     if (errno == ENOENT) {
         printf("[*] Download history was already empty.\n");
+        pthread_mutex_unlock(&g_history_mutex);
         return 0;
     }
     fprintf(stderr, "[!] Error clearing history: %s\n", strerror(errno));
+    pthread_mutex_unlock(&g_history_mutex);
     return -1;
 }

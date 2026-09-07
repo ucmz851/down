@@ -1,5 +1,9 @@
 #include "batch.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <ctype.h>
+#include <errno.h>
 
 void batch_queue_init(batch_queue_t *queue) {
     if (!queue) return;

@@ -218,24 +218,49 @@ check_resumable: ;
     if (config->url[0] == '\0') {
         char url_buf[1900];
         char prompt[128];
-        snprintf(prompt, sizeof(prompt), "%s?%s %sEnter download URL:%s ", cyan, reset, bold, reset);
+        snprintf(prompt, sizeof(prompt), "%s?%s %sEnter download URL(s):%s ", cyan, reset, bold, reset);
 
         if (!prompt_input(prompt, url_buf, sizeof(url_buf), false)) {
             printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
             return -1;
         }
 
-        /* Auto-prepend https:// if protocol scheme is omitted */
-        if (strncmp(url_buf, "http://", 7) != 0 &&
-            strncmp(url_buf, "https://", 8) != 0 &&
-            strncmp(url_buf, "s3://", 5) != 0 &&
-            strncmp(url_buf, "s3a://", 6) != 0) {
-            snprintf(config->url, sizeof(config->url), "https://%s", url_buf);
-        } else {
-            snprintf(config->url, sizeof(config->url), "%s", url_buf);
+        /* Tokenize space- or comma-separated URLs */
+        char *saveptr = NULL;
+        char *token = strtok_r(url_buf, " ,\t\r\n", &saveptr);
+        while (token) {
+            trim_string(token);
+            if (token[0] != '\0') {
+                char clean_url[2048];
+                if (strncmp(token, "http://", 7) != 0 &&
+                    strncmp(token, "https://", 8) != 0 &&
+                    strncmp(token, "s3://", 5) != 0 &&
+                    strncmp(token, "s3a://", 6) != 0) {
+                    snprintf(clean_url, sizeof(clean_url), "https://%s", token);
+                } else {
+                    snprintf(clean_url, sizeof(clean_url), "%s", token);
+                }
+                batch_queue_add(&config->queue, clean_url, NULL, NULL);
+            }
+            token = strtok_r(NULL, " ,\t\r\n", &saveptr);
+        }
+
+        if (config->queue.count > 0) {
+            snprintf(config->url, sizeof(config->url), "%s", config->queue.entries[0].url);
+            if (config->queue.count > 1) {
+                config->max_concurrent_downloads = DEFAULT_CONCURRENT_DOWNLOADS;
+            }
         }
     } else {
-        printf("%s?%s %sTarget URL:%s %s%s%s\n", cyan, reset, bold, reset, cyan, config->url, reset);
+        if (config->queue.count == 0) {
+            batch_queue_add(&config->queue, config->url, config->output_path[0] ? config->output_path : NULL,
+                            config->checksum_spec[0] ? config->checksum_spec : NULL);
+        }
+        if (config->queue.count > 1) {
+            printf("%s?%s %sTarget:%s %s%zu URLs queued%s\n", cyan, reset, bold, reset, cyan, config->queue.count, reset);
+        } else {
+            printf("%s?%s %sTarget URL:%s %s%s%s\n", cyan, reset, bold, reset, cyan, config->url, reset);
+        }
     }
 
     /* Step 2: Mode selection (Quick vs Advanced vs History) */
@@ -293,17 +318,40 @@ prompt_mode: ;
             snprintf(config->output_dir, sizeof(config->output_dir), ".");
         }
 
-        /* Custom filename */
-        char name_buf[512];
-        char name_prompt[128];
-        snprintf(name_prompt, sizeof(name_prompt), "  %sCustom filename%s %s[leave blank for auto-detect]%s: ",
-                 bold, reset, dim, reset);
-        if (!prompt_input(name_prompt, name_buf, sizeof(name_buf), true)) {
-            printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
-            return -1;
-        }
-        if (name_buf[0] != '\0') {
-            snprintf(config->output_path, sizeof(config->output_path), "%s", name_buf);
+        if (config->queue.count <= 1) {
+            /* Custom filename */
+            char name_buf[512];
+            char name_prompt[128];
+            snprintf(name_prompt, sizeof(name_prompt), "  %sCustom filename%s %s[leave blank for auto-detect]%s: ",
+                     bold, reset, dim, reset);
+            if (!prompt_input(name_prompt, name_buf, sizeof(name_buf), true)) {
+                printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+                return -1;
+            }
+            if (name_buf[0] != '\0') {
+                snprintf(config->output_path, sizeof(config->output_path), "%s", name_buf);
+            }
+        } else {
+            /* Concurrent download slots for multi-file swarm */
+            char conc_buf[32];
+            char conc_prompt[128];
+            int def_conc = config->max_concurrent_downloads > 0 ? config->max_concurrent_downloads : DEFAULT_CONCURRENT_DOWNLOADS;
+            snprintf(conc_prompt, sizeof(conc_prompt), "  %sConcurrent downloads (1-16)%s %s[default: %d]%s: ",
+                     bold, reset, dim, def_conc, reset);
+            if (!prompt_input(conc_prompt, conc_buf, sizeof(conc_buf), true)) {
+                printf("\n%s[!] Interactive setup aborted.%s\n", yellow, reset);
+                return -1;
+            }
+            if (conc_buf[0] != '\0') {
+                int c = atoi(conc_buf);
+                if (c >= 1 && c <= MAX_CONCURRENT_DOWNLOADS) {
+                    config->max_concurrent_downloads = c;
+                } else {
+                    config->max_concurrent_downloads = def_conc;
+                }
+            } else {
+                config->max_concurrent_downloads = def_conc;
+            }
         }
 
         /* Number of parallel connections */
@@ -381,9 +429,14 @@ prompt_mode: ;
 
     /* Print confirmation summary */
     printf("\n%s── Ready to Download ──────────────────────────────────────────%s\n", dim, reset);
-    printf("  %sURL%s         : %s\n", bold, reset, config->url);
-    if (config->output_path[0] != '\0') {
-        printf("  %sFile%s        : %s\n", bold, reset, config->output_path);
+    if (config->queue.count > 1) {
+        printf("  %sQueue%s       : %s%zu files%s\n", bold, reset, cyan, config->queue.count, reset);
+        printf("  %sConcurrency%s : %s%d files in parallel%s\n", bold, reset, cyan, config->max_concurrent_downloads, reset);
+    } else {
+        printf("  %sURL%s         : %s\n", bold, reset, config->url);
+        if (config->output_path[0] != '\0') {
+            printf("  %sFile%s        : %s\n", bold, reset, config->output_path);
+        }
     }
     printf("  %sDirectory%s   : %s\n", bold, reset, config->output_dir[0] ? config->output_dir : ".");
     printf("  %sConnections%s : %d\n", bold, reset, config->num_workers);

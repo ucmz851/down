@@ -20,10 +20,13 @@
 #include <pthread.h>
 #include <signal.h>
 #include <curl/curl.h>
+#include "batch.h"
 
 #define DOWN_VERSION "0.0.1"
 #define DEFAULT_NUM_WORKERS 4
 #define MAX_NUM_WORKERS 64
+#define DEFAULT_CONCURRENT_DOWNLOADS 2
+#define MAX_CONCURRENT_DOWNLOADS 16
 #define DEFAULT_CHUNK_SIZE (512 * 1024)   /* 512 KB */
 #define MIN_CHUNK_SIZE     (64 * 1024)    /* 64 KB */
 #define MAX_CHUNK_SIZE     (32 * 1024 * 1024) /* 32 MB */
@@ -63,8 +66,10 @@ typedef struct {
     char checksum_algo[64];
     char expected_checksum[256];
 
-    /* Batch URL queue / input file */
+    /* Batch URL queue / input file / swarm */
     char input_file[1024];
+    int max_concurrent_downloads; /* -j, --concurrent <N> (1-16) */
+    batch_queue_t queue;
 
     /* AWS S3 / Cloudflare R2 SigV4 */
     bool aws_sigv4_enabled;
@@ -93,5 +98,16 @@ int make_directory_recursive(const char *dir_path);
 
 /* Free heap resources in config */
 void config_cleanup(down_config_t *config);
+
+/* Deep-clone a curl_slist structure */
+struct curl_slist *clone_slist(const struct curl_slist *src);
+
+/* Forward declare down_telemetry_t */
+struct down_telemetry_t;
+typedef struct down_telemetry_t down_telemetry_t;
+
+/* Execute download of a single file (used directly or as worker in swarm).
+ * If is_swarm is true, skips standalone banners and runs telemetry quietly. */
+int down_execute_single(down_config_t *config, down_telemetry_t *external_telem, bool is_swarm);
 
 #endif /* DOWN_H */

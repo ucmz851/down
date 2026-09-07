@@ -143,6 +143,23 @@ int main(void) {
         unlink(meta_path);
     }
 
+    /* Subtest 6: Multiple URLs entered in Wizard */
+    {
+        set_simulated_stdin("https://site.org/pkg1.tar.gz https://site.org/pkg2.tar.gz\n1\n");
+        down_config_t config;
+        memset(&config, 0, sizeof(config));
+        config.num_workers = 4;
+        config.chunk_size = DEFAULT_CHUNK_SIZE;
+
+        int res = interactive_run_wizard(&config);
+        assert(res == 0);
+        assert(config.queue.count == 2);
+        assert(strcmp(config.queue.entries[0].url, "https://site.org/pkg1.tar.gz") == 0);
+        assert(strcmp(config.queue.entries[1].url, "https://site.org/pkg2.tar.gz") == 0);
+        assert(config.max_concurrent_downloads == 2);
+        batch_queue_free(&config.queue);
+    }
+
     printf("[+] test_interactive passed successfully!\n");
     return 0;
 }

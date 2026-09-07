@@ -40,6 +40,7 @@ void config_cleanup(down_config_t *config) {
         curl_slist_free_all(config->custom_headers);
         config->custom_headers = NULL;
     }
+    batch_queue_free(&config->queue);
 }
 
 uint32_t parse_size_string(const char *str) {
@@ -92,10 +93,10 @@ void cli_print_version(void) {
 }
 
 void cli_print_usage(const char *prog_name) {
-    printf("Usage: %s [OPTIONS] [<URL>]\n\n", prog_name);
+    printf("Usage: %s [OPTIONS] <URL> [<URL2> ...]\n\n", prog_name);
     printf("High-performance segmented download engine with zero-assembly positional I/O.\n\n");
     printf("Arguments:\n");
-    printf("  <URL>                      HTTP, HTTPS, or S3 (s3://) resource URL to download\n\n");
+    printf("  <URL>                      HTTP, HTTPS, or S3 (s3://) resource URLs to download\n\n");
     printf("Modes & Wizards:\n");
     printf("  -I, --interactive          Launch interactive guided setup wizard\n");
     printf("      --history              Display past download history and resumable sessions\n");
@@ -108,7 +109,9 @@ void cli_print_usage(const char *prog_name) {
     printf("  -C, --checksum <SPEC>      Verify hash after download (<algo>:<hex> or raw hex)\n");
     printf("      --no-fallocate         Disable upfront contiguous disk block pre-allocation\n\n");
     printf("Concurrency & Performance:\n");
-    printf("  -n, --connections <N>      Number of parallel connections (1-%d, default: %d)\n",
+    printf("  -j, --concurrent <N>       Number of concurrent downloads (1-%d, default: %d)\n",
+           MAX_CONCURRENT_DOWNLOADS, DEFAULT_CONCURRENT_DOWNLOADS);
+    printf("  -n, --connections <N>      Number of parallel connections per file (1-%d, default: %d)\n",
            MAX_NUM_WORKERS, DEFAULT_NUM_WORKERS);
     printf("  -s, --chunk-size <SIZE>    Uniform chunk size (e.g. 256K, 512K, 1M, 4M, default: 512K)\n");
     printf("      --static               Use static range partitioning instead of work-stealing\n");
@@ -201,9 +204,15 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
         }
     }
 
+    bool concurrent_specified = false;
+    config->max_concurrent_downloads = DEFAULT_CONCURRENT_DOWNLOADS;
+    batch_queue_init(&config->queue);
+
     static struct option long_options[] = {
         {"output",        required_argument, 0, 'o'},
         {"dir",           required_argument, 0, 'd'},
+        {"concurrent",    required_argument, 0, 'j'},
+        {"jobs",          required_argument, 0, 'j'},
         {"connections",   required_argument, 0, 'n'},
         {"chunk-size",    required_argument, 0, 's'},
         {"continue",      no_argument,       0, 'c'},
@@ -248,7 +257,7 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
 
     int opt;
     int option_index = 0;
-    while ((opt = getopt_long(argc, argv, "o:d:n:s:ct:r:H:U:k46i:C:IqvVh", long_options, &option_index)) != -1) {
+    while ((opt = getopt_long(argc, argv, "o:d:j:n:s:ct:r:H:U:k46i:C:IqvVh", long_options, &option_index)) != -1) {
         switch (opt) {
             case 'o':
                 snprintf(config->output_path, sizeof(config->output_path), "%s", optarg);
@@ -256,6 +265,16 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
             case 'd':
                 snprintf(config->output_dir, sizeof(config->output_dir), "%s", optarg);
                 break;
+            case 'j': {
+                int j = atoi(optarg);
+                if (j < 1 || j > MAX_CONCURRENT_DOWNLOADS) {
+                    fprintf(stderr, "[!] Error: --concurrent must be between 1 and %d\n", MAX_CONCURRENT_DOWNLOADS);
+                    return -1;
+                }
+                config->max_concurrent_downloads = j;
+                concurrent_specified = true;
+                break;
+            }
             case 'n': {
                 int n = atoi(optarg);
                 if (n < 1 || n > MAX_NUM_WORKERS) {
@@ -415,19 +434,44 @@ int cli_parse_args(int argc, char **argv, down_config_t *config) {
         }
     }
 
-    if (optind < argc) {
-        snprintf(config->url, sizeof(config->url), "%s", argv[optind]);
+    /* If input file was specified, load URLs from it */
+    if (config->input_file[0] != '\0') {
+        if (batch_load_file(config->input_file, &config->queue) != 0) {
+            fprintf(stderr, "[!] Failed to read batch input file: %s\n", config->input_file);
+            return -1;
+        }
+    }
+
+    /* Collect all positional URL arguments */
+    int initial_pos_count = argc - optind;
+    while (optind < argc) {
+        const char *arg_url = argv[optind++];
+        if (arg_url[0] != '\0') {
+            const char *out_target = (initial_pos_count == 1 && config->queue.count == 0 && config->output_path[0])
+                                     ? config->output_path : NULL;
+            batch_queue_add(&config->queue, arg_url, out_target,
+                            config->checksum_spec[0] ? config->checksum_spec : NULL);
+        }
+    }
+
+    if (config->queue.count > 0 && config->url[0] == '\0') {
+        snprintf(config->url, sizeof(config->url), "%s", config->queue.entries[0].url);
     }
 
     /* Trigger interactive wizard if explicitly requested (-I) or if run without URL/input-file in a TTY */
-    if (config->interactive_mode || (config->url[0] == '\0' && config->input_file[0] == '\0' && isatty(STDIN_FILENO))) {
+    if (config->interactive_mode || (config->queue.count == 0 && isatty(STDIN_FILENO))) {
         if (interactive_run_wizard(config) != 0) {
             return -1;
         }
-    } else if (config->url[0] == '\0' && config->input_file[0] == '\0') {
+    } else if (config->queue.count == 0) {
         fprintf(stderr, "[!] Error: URL argument, -i/--input-file, or interactive terminal is required\n\n");
         cli_print_usage(argv[0]);
         return -1;
+    }
+
+    /* If only 1 download in queue and user did not explicitly specify -j, default concurrency is 1 */
+    if (config->queue.count <= 1 && !concurrent_specified) {
+        config->max_concurrent_downloads = 1;
     }
 
     if (config->url[0] != '\0') {

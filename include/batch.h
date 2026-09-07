@@ -1,7 +1,8 @@
 #ifndef DOWN_BATCH_H
 #define DOWN_BATCH_H
 
-#include "down.h"
+#include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
     char url[2048];

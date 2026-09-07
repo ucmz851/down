@@ -17,9 +17,9 @@ gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_ch
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_s3.c src/s3.c -o test_s3 -lcurl
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_batch.c src/batch.c -o test_batch
 gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_update.c src/update.c -o test_update -lcurl
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/history.c src/telemetry.c -o test_config_file -lcurl -lcrypto -lpthread -lm
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_interactive.c src/interactive.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c -o test_interactive -lcurl -lcrypto -lpthread -lm
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_history.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/interactive.c src/telemetry.c -o test_history -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/history.c src/telemetry.c src/batch.c -o test_config_file -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_interactive.c src/interactive.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c src/batch.c -o test_interactive -lcurl -lcrypto -lpthread -lm
+gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_history.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/interactive.c src/telemetry.c src/batch.c -o test_history -lcurl -lcrypto -lpthread -lm
 
 echo "[2/7] Running unit tests..."
 echo "  [*] test_storage (Positional I/O & fallocate)..."
@@ -245,6 +245,24 @@ if [ "$WIZ_HASH" != "$HASH_16M" ]; then
     exit 1
 fi
 echo "[+] Interactive wizard resume verified (SHA-256: $WIZ_HASH)!"
+
+echo "--- Test K: Parallel Swarm Concurrency (-j 2 with 3 URLs) ---"
+rm -rf "$WORK_DIR/swarm_out"
+mkdir -p "$WORK_DIR/swarm_out"
+./down -q -j 2 -d "$WORK_DIR/swarm_out" -n 2 \
+    "http://127.0.0.1:$PORT/data_4m.bin" \
+    "http://127.0.0.1:$PORT/data_8m.bin" \
+    "http://127.0.0.1:$PORT/data_16m.bin"
+
+SW_4M=$(sha256sum "$WORK_DIR/swarm_out/data_4m.bin" | awk '{print $1}')
+SW_8M=$(sha256sum "$WORK_DIR/swarm_out/data_8m.bin" | awk '{print $1}')
+SW_16M=$(sha256sum "$WORK_DIR/swarm_out/data_16m.bin" | awk '{print $1}')
+
+if [ "$SW_4M" != "$HASH_4M" ] || [ "$SW_8M" != "$HASH_8M" ] || [ "$SW_16M" != "$HASH_16M" ]; then
+    echo "[!] Swarm parallel download hash mismatch!"
+    exit 1
+fi
+echo "[+] Swarm concurrent download (3 files across 2 slots) verified successfully!"
 
 echo ""
 echo "=========================================================="

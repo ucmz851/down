@@ -10,6 +10,7 @@
 #include "s3.h"
 #include "batch.h"
 #include "history.h"
+#include "swarm.h"
 
 volatile sig_atomic_t g_shutdown_requested = 0;
 
@@ -32,7 +33,7 @@ static void setup_signals(void) {
     signal(SIGPIPE, SIG_IGN);
 }
 
-static struct curl_slist *clone_slist(const struct curl_slist *src) {
+struct curl_slist *clone_slist(const struct curl_slist *src) {
     struct curl_slist *dst = NULL;
     for (const struct curl_slist *p = src; p != NULL; p = p->next) {
         dst = curl_slist_append(dst, p->data);
@@ -125,7 +126,7 @@ static void print_download_spec(const down_config_t *config, const down_probe_t 
     fflush(stdout);
 }
 
-static int execute_download(down_config_t *config) {
+int down_execute_single(down_config_t *config, down_telemetry_t *external_telem, bool is_swarm) {
     if (!config) return -1;
 
     /* S3 URL handling and auth */
@@ -137,15 +138,21 @@ static int execute_download(down_config_t *config) {
     s3_init_auth(config);
 
     /* Probe remote resource */
-    if (!config->quiet) {
+    if (!config->quiet && !is_swarm) {
         printf("[*] Probing remote resource: %s\n", config->url);
         fflush(stdout);
     }
 
     down_probe_t probe;
     if (probe_url(config, &probe) != 0) {
-        fprintf(stderr, "[!] Failed to probe remote URL\n");
+        if (!is_swarm) {
+            fprintf(stderr, "[!] Failed to probe remote URL\n");
+        }
         return -1;
+    }
+
+    if (external_telem) {
+        atomic_store(&external_telem->total_size, probe.content_length);
     }
 
     /* Resolve destination filename and directory */
@@ -158,8 +165,10 @@ static int execute_download(down_config_t *config) {
 
     if (config->output_dir[0] != '\0') {
         if (make_directory_recursive(config->output_dir) != 0) {
-            fprintf(stderr, "[!] Error: failed to create destination directory '%s': %s\n",
-                    config->output_dir, strerror(errno));
+            if (!is_swarm) {
+                fprintf(stderr, "[!] Error: failed to create destination directory '%s': %s\n",
+                        config->output_dir, strerror(errno));
+            }
             return -1;
         }
         size_t dlen = strlen(config->output_dir);
@@ -198,7 +207,9 @@ static int execute_download(down_config_t *config) {
     /* Initialize target file and pre-allocate disk blocks */
     down_storage_t storage;
     if (storage_init(&storage, config->output_path, probe.content_length, config->no_fallocate, config->resume_mode) != 0) {
-        fprintf(stderr, "[!] Storage initialization failed\n");
+        if (!is_swarm) {
+            fprintf(stderr, "[!] Storage initialization failed\n");
+        }
         return -1;
     }
 
@@ -212,7 +223,9 @@ static int execute_download(down_config_t *config) {
         down_meta_t meta;
         if (meta_open(&meta, config->output_path, probe.effective_url,
                       probe.content_length, config->chunk_size, config->resume_mode) != 0) {
-            fprintf(stderr, "[!] Failed to initialize .down control file\n");
+            if (!is_swarm) {
+                fprintf(stderr, "[!] Failed to initialize .down control file\n");
+            }
             storage_close(&storage);
             return -1;
         }
@@ -222,38 +235,54 @@ static int execute_download(down_config_t *config) {
         if (initial_bytes > probe.content_length) initial_bytes = probe.content_length;
 
         if (completed_chunks >= meta.hdr->num_chunks) {
-            printf("[+] File is already completely downloaded: %s\n", config->output_path);
+            if (!is_swarm) {
+                printf("[+] File is already completely downloaded: %s\n", config->output_path);
+            }
             meta_remove(&meta);
             storage_close(&storage);
+            if (external_telem) {
+                atomic_store(&external_telem->downloaded_bytes, probe.content_length);
+                atomic_store(&external_telem->total_size, probe.content_length);
+            }
+            history_record_complete(config, probe.content_length);
             return 0;
         }
 
         /* Print clean download spec card */
-        print_download_spec(config, &probe, meta.is_resumed, completed_chunks,
-                            meta.hdr->num_chunks, initial_bytes);
+        if (!is_swarm) {
+            print_download_spec(config, &probe, meta.is_resumed, completed_chunks,
+                                meta.hdr->num_chunks, initial_bytes);
+        }
 
-        down_telemetry_t telemetry;
-        telemetry_init(&telemetry, probe.content_length, initial_bytes, config->quiet);
-        telemetry_start(&telemetry);
+        down_telemetry_t local_telem;
+        down_telemetry_t *telem_ptr = external_telem ? external_telem : &local_telem;
+        telemetry_init(telem_ptr, probe.content_length, initial_bytes, is_swarm ? true : config->quiet);
+        if (!is_swarm) {
+            telemetry_start(telem_ptr);
+        }
 
         down_scheduler_t scheduler;
         if (scheduler_init(&scheduler, &meta, probe.content_length, config->chunk_size,
                            config->num_workers, config->use_static) != 0) {
-            fprintf(stderr, "[!] Scheduler initialization failed\n");
-            telemetry_stop(&telemetry);
+            if (!is_swarm) {
+                fprintf(stderr, "[!] Scheduler initialization failed\n");
+                telemetry_stop(telem_ptr);
+            }
             meta_close(&meta);
             storage_close(&storage);
             return -1;
         }
 
         worker_context_t workers[MAX_NUM_WORKERS];
-        workers_start(workers, config->num_workers, config, &storage, &scheduler, &telemetry);
+        workers_start(workers, config->num_workers, config, &storage, &scheduler, telem_ptr);
 
         /* Wait for workers to finish */
         workers_join(workers, config->num_workers);
 
         /* Stop telemetry and flush storage */
-        telemetry_stop(&telemetry);
+        if (!is_swarm) {
+            telemetry_stop(telem_ptr);
+        }
         storage_sync(&storage);
 
         bool all_done = (atomic_load(&meta.hdr->completed_chunks) >= meta.hdr->num_chunks);
@@ -262,7 +291,7 @@ static int execute_download(down_config_t *config) {
         if (all_done) {
             /* Checksum validation if requested */
             if (config->expected_checksum[0] != '\0') {
-                if (!config->quiet) {
+                if (!config->quiet && !is_swarm) {
                     printf("[*] Verifying file checksum (%s)...\n", config->checksum_algo);
                     fflush(stdout);
                 }
@@ -270,11 +299,11 @@ static int execute_download(down_config_t *config) {
                 int v_res = checksum_verify_file(config->output_path, config->checksum_algo,
                                                  config->expected_checksum, actual_hex, sizeof(actual_hex));
                 if (v_res == 0) {
-                    if (!config->quiet) {
+                    if (!config->quiet && !is_swarm) {
                         printf("[+] Checksum verified: %s: %s\n", config->checksum_algo, actual_hex);
                     }
                     meta_remove(&meta);
-                    telemetry_print_complete(&telemetry, config->output_path);
+                    if (!is_swarm) telemetry_print_complete(telem_ptr, config->output_path);
                     history_record_complete(config, probe.content_length);
                     download_ret = 0;
                 } else if (v_res == 1) {
@@ -293,42 +322,51 @@ static int execute_download(down_config_t *config) {
                 }
             } else {
                 meta_remove(&meta);
-                telemetry_print_complete(&telemetry, config->output_path);
+                if (!is_swarm) telemetry_print_complete(telem_ptr, config->output_path);
                 history_record_complete(config, probe.content_length);
                 download_ret = 0;
             }
         } else if (g_shutdown_requested) {
             meta_sync(&meta, true);
             meta_close(&meta);
-            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            uint64_t cur = atomic_load(&telem_ptr->downloaded_bytes);
             history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
-            telemetry_print_paused(&telemetry, config->output_path, meta_path, config->url);
+            if (!is_swarm) telemetry_print_paused(telem_ptr, config->output_path, meta_path, config->url);
             download_ret = -2;
         } else {
             meta_sync(&meta, true);
             meta_close(&meta);
-            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            uint64_t cur = atomic_load(&telem_ptr->downloaded_bytes);
             history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
-            fprintf(stderr, "\n[!] Download incomplete due to network transfer error. Resume with -c.\n");
+            if (!is_swarm) {
+                fprintf(stderr, "\n[!] Download incomplete due to network transfer error. Resume with -c.\n");
+            }
             download_ret = -1;
         }
     } else {
         /* Single-stream download path */
-        print_download_spec(config, &probe, false, 0, 0, 0);
+        if (!is_swarm) {
+            print_download_spec(config, &probe, false, 0, 0, 0);
+        }
 
-        down_telemetry_t telemetry;
-        telemetry_init(&telemetry, probe.content_length, 0, config->quiet);
-        telemetry_start(&telemetry);
+        down_telemetry_t local_telem;
+        down_telemetry_t *telem_ptr = external_telem ? external_telem : &local_telem;
+        telemetry_init(telem_ptr, probe.content_length, 0, is_swarm ? true : config->quiet);
+        if (!is_swarm) {
+            telemetry_start(telem_ptr);
+        }
 
-        int res = worker_download_single_stream(config, &storage, &telemetry, probe.content_length);
+        int res = worker_download_single_stream(config, &storage, telem_ptr, probe.content_length);
 
-        telemetry_stop(&telemetry);
+        if (!is_swarm) {
+            telemetry_stop(telem_ptr);
+        }
         storage_sync(&storage);
 
         if (res == 0 && !g_shutdown_requested) {
             /* Checksum validation if requested */
             if (config->expected_checksum[0] != '\0') {
-                if (!config->quiet) {
+                if (!config->quiet && !is_swarm) {
                     printf("[*] Verifying file checksum (%s)...\n", config->checksum_algo);
                     fflush(stdout);
                 }
@@ -336,10 +374,10 @@ static int execute_download(down_config_t *config) {
                 int v_res = checksum_verify_file(config->output_path, config->checksum_algo,
                                                  config->expected_checksum, actual_hex, sizeof(actual_hex));
                 if (v_res == 0) {
-                    if (!config->quiet) {
+                    if (!config->quiet && !is_swarm) {
                         printf("[+] Checksum verified: %s: %s\n", config->checksum_algo, actual_hex);
                     }
-                    telemetry_print_complete(&telemetry, config->output_path);
+                    if (!is_swarm) telemetry_print_complete(telem_ptr, config->output_path);
                     history_record_complete(config, probe.content_length);
                     download_ret = 0;
                 } else if (v_res == 1) {
@@ -353,19 +391,19 @@ static int execute_download(down_config_t *config) {
                     download_ret = -1;
                 }
             } else {
-                telemetry_print_complete(&telemetry, config->output_path);
+                if (!is_swarm) telemetry_print_complete(telem_ptr, config->output_path);
                 history_record_complete(config, probe.content_length);
                 download_ret = 0;
             }
         } else if (g_shutdown_requested) {
-            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            uint64_t cur = atomic_load(&telem_ptr->downloaded_bytes);
             history_record_update(config, cur, probe.content_length, DOWN_STATUS_INTERRUPTED);
-            printf("\n[!] Single stream download aborted by user.\n");
+            if (!is_swarm) printf("\n[!] Single stream download aborted by user.\n");
             download_ret = -2;
         } else {
-            uint64_t cur = atomic_load(&telemetry.downloaded_bytes);
+            uint64_t cur = atomic_load(&telem_ptr->downloaded_bytes);
             history_record_update(config, cur, probe.content_length, DOWN_STATUS_FAILED);
-            fprintf(stderr, "\n[!] Single stream download failed.\n");
+            if (!is_swarm) fprintf(stderr, "\n[!] Single stream download failed.\n");
             download_ret = -1;
         }
     }
@@ -391,94 +429,31 @@ int main(int argc, char **argv) {
 
     int final_status = 0;
 
-    /* Check if batch mode is requested */
-    if (config.input_file[0] != '\0') {
-        batch_queue_t queue;
-        batch_queue_init(&queue);
-
-        if (batch_load_file(config.input_file, &queue) != 0) {
-            fprintf(stderr, "[!] Failed to read batch input file: %s\n", config.input_file);
-            config_cleanup(&config);
-            curl_global_cleanup();
-            return 1;
-        }
-
-        /* If a positional URL was also specified, append or prepend it */
-        if (config.url[0] != '\0') {
-            batch_queue_add(&queue, config.url, config.output_path[0] ? config.output_path : NULL,
-                            config.checksum_spec[0] ? config.checksum_spec : NULL);
-        }
-
-        if (queue.count == 0) {
-            fprintf(stderr, "[!] Error: input file '%s' contains no valid URLs\n", config.input_file);
-            batch_queue_free(&queue);
-            config_cleanup(&config);
-            curl_global_cleanup();
-            return 1;
-        }
-
-        if (!config.quiet) {
-            printf("[*] Loaded %zu URLs from '%s'\n", queue.count, config.input_file);
-        }
-
-        size_t success_count = 0;
-        size_t fail_count = 0;
-
-        for (size_t i = 0; i < queue.count; i++) {
-            if (g_shutdown_requested) {
-                printf("\n[!] Batch download aborted by user.\n");
-                break;
-            }
-
-            if (!config.quiet) {
-                printf("\n=========================================================================\n");
-                printf(" [Batch %zu/%zu] %s\n", i + 1, queue.count, queue.entries[i].url);
-                printf("=========================================================================\n");
-            }
-
-            down_config_t item_config = config;
-            item_config.custom_headers = clone_slist(config.custom_headers);
-            snprintf(item_config.url, sizeof(item_config.url), "%s", queue.entries[i].url);
-
-            if (queue.entries[i].output_name[0] != '\0') {
-                snprintf(item_config.output_path, sizeof(item_config.output_path), "%s", queue.entries[i].output_name);
-            } else if (queue.count > 1) {
-                item_config.output_path[0] = '\0'; /* Auto-detect filename per entry */
-            }
-
-            if (queue.entries[i].checksum_spec[0] != '\0') {
-                snprintf(item_config.checksum_spec, sizeof(item_config.checksum_spec), "%s", queue.entries[i].checksum_spec);
-                checksum_parse_spec(queue.entries[i].checksum_spec, item_config.checksum_algo,
-                                    sizeof(item_config.checksum_algo), item_config.expected_checksum,
-                                    sizeof(item_config.expected_checksum));
-            }
-
-            int ret = execute_download(&item_config);
-            config_cleanup(&item_config);
-
-            if (ret == 0) {
-                success_count++;
-            } else {
-                fail_count++;
-            }
-        }
-
-        if (!config.quiet) {
-            printf("\n─────────────────────────────────────────────────────────────────────────\n");
-            printf(" Batch Complete: %zu succeeded, %zu failed (Total: %zu)\n",
-                   success_count, fail_count, queue.count);
-            printf("─────────────────────────────────────────────────────────────────────────\n");
-        }
-
-        batch_queue_free(&queue);
-        final_status = (fail_count == 0 && !g_shutdown_requested) ? 0 : 1;
+    if (config.queue.count > 1) {
+        final_status = swarm_execute(&config, &config.queue, config.max_concurrent_downloads);
     } else {
-        /* Single download execution */
-        int ret = execute_download(&config);
-        final_status = (ret == 0) ? 0 : (ret == 2 ? 2 : 1);
+        if (config.queue.count == 1) {
+            snprintf(config.url, sizeof(config.url), "%s", config.queue.entries[0].url);
+            if (config.queue.entries[0].output_name[0] != '\0') {
+                snprintf(config.output_path, sizeof(config.output_path), "%s", config.queue.entries[0].output_name);
+            }
+            if (config.queue.entries[0].checksum_spec[0] != '\0') {
+                snprintf(config.checksum_spec, sizeof(config.checksum_spec), "%s", config.queue.entries[0].checksum_spec);
+                checksum_parse_spec(config.checksum_spec, config.checksum_algo,
+                                    sizeof(config.checksum_algo), config.expected_checksum,
+                                    sizeof(config.expected_checksum));
+            }
+        }
+        if (config.url[0] != '\0') {
+            final_status = down_execute_single(&config, NULL, false);
+        }
     }
 
     config_cleanup(&config);
     curl_global_cleanup();
-    return final_status;
+
+    if (final_status == -2 || g_shutdown_requested) {
+        return 130;
+    }
+    return (final_status == 0) ? 0 : (final_status == 2 ? 2 : 1);
 }
