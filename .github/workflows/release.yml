@@ -1,0 +1,68 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-amd64
+            os_name: linux
+            arch_name: amd64
+          - os: macos-latest
+            target: darwin-arm64
+            os_name: darwin
+            arch_name: arm64
+          - os: macos-13
+            target: darwin-amd64
+            os_name: darwin
+            arch_name: amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcurl4-openssl-dev libssl-dev pkg-config
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install curl openssl pkg-config
+
+      - name: Build binary
+        run: |
+          make clean
+          make
+
+      - name: Package asset
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          TARBALL="down-v${VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.tar.gz"
+          tar -czf "$TARBALL" down
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "$TARBALL" > "${TARBALL}.sha256"
+          else
+            shasum -a 256 "$TARBALL" > "${TARBALL}.sha256"
+          fi
+          echo "TARBALL=$TARBALL" >> $GITHUB_ENV
+
+      - name: Upload artifact to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ env.TARBALL }}
+            ${{ env.TARBALL }}.sha256

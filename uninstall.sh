@@ -73,14 +73,16 @@ CANDIDATES=(
 )
 
 REMOVED=0
-declare -A SEEN
+SEEN_TARGETS=" "
 
 echo -e "${C_BLUE}${C_BOLD}◆ Scanning system for Down installations...${C_RESET}"
 
 for target in "${CANDIDATES[@]}"; do
     [ -z "$target" ] && continue
-    [ -n "${SEEN[$target]:-}" ] && continue
-    SEEN["$target"]=1
+    case "$SEEN_TARGETS" in
+        *" ${target} "*) continue ;;
+    esac
+    SEEN_TARGETS="${SEEN_TARGETS}${target} "
 
     if [ -f "$target" ] || [ -L "$target" ]; then
         echo -e "  ${C_MUTED}Found binary at:${C_RESET} ${C_BOLD}${target}${C_RESET}"
@@ -101,18 +103,23 @@ done
 
 STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/down"
 CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/down"
+MAC_APP_DIR="${HOME}/Library/Application Support/down"
 if [ "$PURGE" -eq 1 ]; then
     if [ -d "$STATE_DIR" ]; then
         rm -rf "$STATE_DIR"
         echo -e "  ${C_GREEN}✔ Purged history and session state at ${STATE_DIR}${C_RESET}"
+    fi
+    if [ -d "$MAC_APP_DIR" ]; then
+        rm -rf "$MAC_APP_DIR"
+        echo -e "  ${C_GREEN}✔ Purged Application Support data at ${MAC_APP_DIR}${C_RESET}"
     fi
     if [ -d "$CONFIG_DIR" ]; then
         rm -rf "$CONFIG_DIR"
         echo -e "  ${C_GREEN}✔ Purged configuration directory at ${CONFIG_DIR}${C_RESET}"
     fi
     [ -f "${HOME}/.downrc" ] && rm -f "${HOME}/.downrc" && echo -e "  ${C_GREEN}✔ Removed ${HOME}/.downrc${C_RESET}"
-elif [ -d "$STATE_DIR" ]; then
-    echo -e "  ${C_MUTED}Note: Download history at ${STATE_DIR} preserved. (Pass --purge to remove)${C_RESET}"
+elif [ -d "$STATE_DIR" ] || [ -d "$MAC_APP_DIR" ]; then
+    echo -e "  ${C_MUTED}Note: Download history preserved. (Pass --purge to remove)${C_RESET}"
 fi
 
 if [ "$REMOVED" -gt 0 ]; then

@@ -11,18 +11,41 @@ echo "=========================================================="
 TEST_STATE_DIR=$(mktemp -d /tmp/down_state_XXXXXX)
 export XDG_STATE_HOME="$TEST_STATE_DIR"
 
+calc_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | awk '{print $1}'
+    else
+        shasum -a 256 "$1" | awk '{print $1}'
+    fi
+}
+
+UNAME_S="$(uname -s)"
+if [ "$UNAME_S" = "Darwin" ]; then
+    CC="${CC:-clang}"
+    BREW_PREFIX="$(brew --prefix 2>/dev/null || ([ -d /opt/homebrew ] && echo /opt/homebrew) || echo /usr/local)"
+    OPENSSL_PREFIX="$(brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null || echo "${BREW_PREFIX}/opt/openssl")"
+    CURL_PREFIX="$(brew --prefix curl 2>/dev/null || echo "${BREW_PREFIX}/opt/curl")"
+    MAC_CFLAGS="-I${BREW_PREFIX}/include -I${OPENSSL_PREFIX}/include -I${CURL_PREFIX}/include"
+    MAC_LDFLAGS="-L${BREW_PREFIX}/lib -L${OPENSSL_PREFIX}/lib -L${CURL_PREFIX}/lib"
+else
+    CC="${CC:-gcc}"
+    MAC_CFLAGS=""
+    MAC_LDFLAGS=""
+fi
+BASE_CFLAGS="-Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude ${MAC_CFLAGS}"
+
 echo "[1/7] Compiling unit tests..."
 mkdir -p build
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_storage.c src/storage.c -o test_storage -lpthread
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_meta.c src/meta.c -o test_meta -lpthread
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_scheduler.c src/scheduler.c src/meta.c -o test_scheduler -lpthread
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_checksum.c src/checksum.c -o test_checksum -lcrypto
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_s3.c src/s3.c -o test_s3 -lcurl
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_batch.c src/batch.c -o test_batch
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_update.c src/update.c -o test_update -lcurl
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/history.c src/telemetry.c src/batch.c -o test_config_file -lcurl -lcrypto -lpthread -lm
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_interactive.c src/interactive.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c src/batch.c -o test_interactive -lcurl -lcrypto -lpthread -lm
-gcc -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude tests/test_history.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/interactive.c src/telemetry.c src/batch.c -o test_history -lcurl -lcrypto -lpthread -lm
+$CC $BASE_CFLAGS tests/test_storage.c src/storage.c -o test_storage $MAC_LDFLAGS -lpthread
+$CC $BASE_CFLAGS tests/test_meta.c src/meta.c -o test_meta $MAC_LDFLAGS -lpthread
+$CC $BASE_CFLAGS tests/test_scheduler.c src/scheduler.c src/meta.c -o test_scheduler $MAC_LDFLAGS -lpthread
+$CC $BASE_CFLAGS tests/test_checksum.c src/checksum.c -o test_checksum $MAC_LDFLAGS -lcrypto
+$CC $BASE_CFLAGS tests/test_s3.c src/s3.c -o test_s3 $MAC_LDFLAGS -lcurl
+$CC $BASE_CFLAGS tests/test_batch.c src/batch.c -o test_batch $MAC_LDFLAGS
+$CC $BASE_CFLAGS tests/test_update.c src/update.c -o test_update $MAC_LDFLAGS -lcurl
+$CC $BASE_CFLAGS tests/test_config_file.c src/config_file.c src/cli.c src/checksum.c src/s3.c src/update.c src/interactive.c src/history.c src/telemetry.c src/batch.c -o test_config_file $MAC_LDFLAGS -lcurl -lcrypto -lpthread -lm
+$CC $BASE_CFLAGS tests/test_interactive.c src/interactive.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/telemetry.c src/batch.c -o test_interactive $MAC_LDFLAGS -lcurl -lcrypto -lpthread -lm
+$CC $BASE_CFLAGS tests/test_history.c src/history.c src/cli.c src/checksum.c src/s3.c src/update.c src/config_file.c src/interactive.c src/telemetry.c src/batch.c -o test_history $MAC_LDFLAGS -lcurl -lcrypto -lpthread -lm
 
 echo "[2/7] Running unit tests..."
 echo "  [*] test_storage (Positional I/O & fallocate)..."
@@ -54,9 +77,9 @@ WORK_DIR=$(mktemp -d /tmp/down_work_XXXXXX)
 head -c 4194304 /dev/urandom > "$SERVE_DIR/data_4m.bin"
 head -c 8388608 /dev/urandom > "$SERVE_DIR/data_8m.bin"
 head -c 16777216 /dev/urandom > "$SERVE_DIR/data_16m.bin"
-HASH_4M=$(sha256sum "$SERVE_DIR/data_4m.bin" | awk '{print $1}')
-HASH_8M=$(sha256sum "$SERVE_DIR/data_8m.bin" | awk '{print $1}')
-HASH_16M=$(sha256sum "$SERVE_DIR/data_16m.bin" | awk '{print $1}')
+HASH_4M=$(calc_sha256 "$SERVE_DIR/data_4m.bin")
+HASH_8M=$(calc_sha256 "$SERVE_DIR/data_8m.bin")
+HASH_16M=$(calc_sha256 "$SERVE_DIR/data_16m.bin")
 
 # Start mock HTTP server
 python3 tests/mock_server.py "$SERVE_DIR" 0 > "$WORK_DIR/server.log" 2>&1 &
@@ -90,7 +113,7 @@ echo "[4/7] Executing Core Engine Integration Tests..."
 # Test A: Single-Worker Fallback (Phase 1)
 echo "--- Test A: Single Stream Download ---"
 ./down -q -n 1 -o "$WORK_DIR/dl_single.bin" "http://127.0.0.1:$PORT/data_8m.bin"
-DL_HASH=$(sha256sum "$WORK_DIR/dl_single.bin" | awk '{print $1}')
+DL_HASH=$(calc_sha256 "$WORK_DIR/dl_single.bin")
 if [ "$DL_HASH" != "$HASH_8M" ]; then
     echo "[!] Hash mismatch on single stream download!"
     exit 1
@@ -100,7 +123,7 @@ echo "[+] Single stream download verified (SHA-256: $DL_HASH)"
 # Test B: Static Multi-Worker Concurrency (Phase 2)
 echo "--- Test B: Static Multi-Worker Concurrency (4 workers, --static) ---"
 ./down -q -n 4 --static -o "$WORK_DIR/dl_static.bin" "http://127.0.0.1:$PORT/data_8m.bin"
-DL_HASH=$(sha256sum "$WORK_DIR/dl_static.bin" | awk '{print $1}')
+DL_HASH=$(calc_sha256 "$WORK_DIR/dl_static.bin")
 if [ "$DL_HASH" != "$HASH_8M" ]; then
     echo "[!] Hash mismatch on static multi-worker download!"
     exit 1
@@ -110,7 +133,7 @@ echo "[+] Static multi-worker download verified (SHA-256: $DL_HASH)"
 # Test C: Dynamic Work-Stealing Allocator (Phase 3)
 echo "--- Test C: Dynamic Work-Stealing Allocator (8 workers, 256K chunks) ---"
 ./down -q -n 8 -s 256K -o "$WORK_DIR/dl_dynamic.bin" "http://127.0.0.1:$PORT/data_16m.bin"
-DL_HASH=$(sha256sum "$WORK_DIR/dl_dynamic.bin" | awk '{print $1}')
+DL_HASH=$(calc_sha256 "$WORK_DIR/dl_dynamic.bin")
 if [ "$DL_HASH" != "$HASH_16M" ]; then
     echo "[!] Hash mismatch on dynamic work-stealing download!"
     exit 1
@@ -140,7 +163,7 @@ if [ -f "$WORK_DIR/dl_resume.bin.down" ]; then
     ./down -c -q -n 4 -s 128K -o "$WORK_DIR/dl_resume.bin" "http://127.0.0.1:$PORT/data_16m.bin"
 fi
 
-DL_HASH=$(sha256sum "$WORK_DIR/dl_resume.bin" | awk '{print $1}')
+DL_HASH=$(calc_sha256 "$WORK_DIR/dl_resume.bin")
 if [ "$DL_HASH" != "$HASH_16M" ]; then
     echo "[!] Hash mismatch after resumed download!"
     exit 1
@@ -173,8 +196,8 @@ http://127.0.0.1:$PORT/data_8m.bin   file2.bin
 EOF
 
 ./down -q -i "$WORK_DIR/batch_list.txt" -d "$WORK_DIR/batch_out" -n 4
-F1_HASH=$(sha256sum "$WORK_DIR/batch_out/file1.bin" | awk '{print $1}')
-F2_HASH=$(sha256sum "$WORK_DIR/batch_out/file2.bin" | awk '{print $1}')
+F1_HASH=$(calc_sha256 "$WORK_DIR/batch_out/file1.bin")
+F2_HASH=$(calc_sha256 "$WORK_DIR/batch_out/file2.bin")
 
 if [ "$F1_HASH" != "$HASH_4M" ] || [ "$F2_HASH" != "$HASH_8M" ]; then
     echo "[!] Batch files hash mismatch!"
@@ -203,7 +226,7 @@ echo "[+] Unauthenticated request to protected endpoint correctly rejected (HTTP
     -o "$WORK_DIR/auth_s3.bin" \
     "http://127.0.0.1:$PORT/secure/data_8m.bin"
 
-S3_HASH=$(sha256sum "$WORK_DIR/auth_s3.bin" | awk '{print $1}')
+S3_HASH=$(calc_sha256 "$WORK_DIR/auth_s3.bin")
 if [ "$S3_HASH" != "$HASH_8M" ]; then
     echo "[!] Hash mismatch on SigV4 authenticated download!"
     exit 1
@@ -218,7 +241,7 @@ echo "--- Test I: Interactive CLI Wizard Download ---"
 ./down --clear-history >/dev/null 2>&1 || true
 rm -f "$WORK_DIR"/*.down "$WORK_DIR"/*.inlay
 printf "http://127.0.0.1:$PORT/data_4m.bin\n2\n$WORK_DIR\ninteractive_result.bin\n4\n256K\n\n\n" | ./down -I -q
-INT_HASH=$(sha256sum "$WORK_DIR/interactive_result.bin" | awk '{print $1}')
+INT_HASH=$(calc_sha256 "$WORK_DIR/interactive_result.bin")
 if [ "$INT_HASH" != "$HASH_4M" ]; then
     echo "[!] Hash mismatch on interactive wizard download!"
     exit 1
@@ -242,7 +265,7 @@ set -e
 
 # Interactive wizard detects resumable download; press Enter (option 1) to resume
 printf "1\n" | ./down -I -q
-WIZ_HASH=$(sha256sum "$WORK_DIR/wiz_resume.bin" | awk '{print $1}')
+WIZ_HASH=$(calc_sha256 "$WORK_DIR/wiz_resume.bin")
 if [ "$WIZ_HASH" != "$HASH_16M" ]; then
     echo "[!] Hash mismatch on wizard resumed download!"
     exit 1
@@ -257,9 +280,9 @@ mkdir -p "$WORK_DIR/swarm_out"
     "http://127.0.0.1:$PORT/data_8m.bin" \
     "http://127.0.0.1:$PORT/data_16m.bin"
 
-SW_4M=$(sha256sum "$WORK_DIR/swarm_out/data_4m.bin" | awk '{print $1}')
-SW_8M=$(sha256sum "$WORK_DIR/swarm_out/data_8m.bin" | awk '{print $1}')
-SW_16M=$(sha256sum "$WORK_DIR/swarm_out/data_16m.bin" | awk '{print $1}')
+SW_4M=$(calc_sha256 "$WORK_DIR/swarm_out/data_4m.bin")
+SW_8M=$(calc_sha256 "$WORK_DIR/swarm_out/data_8m.bin")
+SW_16M=$(calc_sha256 "$WORK_DIR/swarm_out/data_16m.bin")
 
 if [ "$SW_4M" != "$HASH_4M" ] || [ "$SW_8M" != "$HASH_8M" ] || [ "$SW_16M" != "$HASH_16M" ]; then
     echo "[!] Swarm parallel download hash mismatch!"

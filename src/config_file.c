@@ -162,6 +162,14 @@ int config_file_find_default(char *dest, size_t dest_size) {
     /* 2. ~/.config/down/config */
     const char *home = getenv("HOME");
     if (home && *home) {
+#if defined(__APPLE__)
+        /* macOS standard Application Support location */
+        snprintf(dest, dest_size, "%s/Library/Application Support/down/config", home);
+        if (access(dest, R_OK) == 0) return 1;
+        snprintf(dest, dest_size, "%s/Library/Application Support/inlay/config", home);
+        if (access(dest, R_OK) == 0) return 1;
+#endif
+
         snprintf(dest, dest_size, "%s/.config/down/config", home);
         if (access(dest, R_OK) == 0) return 1;
         snprintf(dest, dest_size, "%s/.config/inlay/config", home);

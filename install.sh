@@ -79,11 +79,13 @@ if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
         "/usr/bin/inlay"
     )
     REMOVED=0
-    declare -A SEEN
+    SEEN_TARGETS=" "
     for target in "${CANDIDATES[@]}"; do
         [ -z "$target" ] && continue
-        [ -n "${SEEN[$target]:-}" ] && continue
-        SEEN["$target"]=1
+        case "$SEEN_TARGETS" in
+            *" ${target} "*) continue ;;
+        esac
+        SEEN_TARGETS="${SEEN_TARGETS}${target} "
         if [ -f "$target" ] || [ -L "$target" ]; then
             echo -e "  ${C_MUTED}Found binary at:${C_RESET} ${C_BOLD}${target}${C_RESET}"
             if [ -w "$target" ] || [ -w "$(dirname "$target")" ]; then
@@ -103,18 +105,23 @@ if [ "${1:-}" = "--uninstall" ] || [ "${1:-}" = "uninstall" ]; then
 
     STATE_DIR="${XDG_STATE_HOME:-${HOME}/.local/state}/down"
     CONFIG_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/down"
+    MAC_APP_DIR="${HOME}/Library/Application Support/down"
     if [ "$PURGE" -eq 1 ]; then
         if [ -d "$STATE_DIR" ]; then
             rm -rf "$STATE_DIR"
             echo -e "  ${C_GREEN}✔ Purged history and session state at ${STATE_DIR}${C_RESET}"
+        fi
+        if [ -d "$MAC_APP_DIR" ]; then
+            rm -rf "$MAC_APP_DIR"
+            echo -e "  ${C_GREEN}✔ Purged Application Support data at ${MAC_APP_DIR}${C_RESET}"
         fi
         if [ -d "$CONFIG_DIR" ]; then
             rm -rf "$CONFIG_DIR"
             echo -e "  ${C_GREEN}✔ Purged configuration directory at ${CONFIG_DIR}${C_RESET}"
         fi
         [ -f "${HOME}/.downrc" ] && rm -f "${HOME}/.downrc" && echo -e "  ${C_GREEN}✔ Removed ${HOME}/.downrc${C_RESET}"
-    elif [ -d "$STATE_DIR" ]; then
-        echo -e "  ${C_MUTED}Note: Download history at ${STATE_DIR} preserved. (Pass --purge to remove)${C_RESET}"
+    elif [ -d "$STATE_DIR" ] || [ -d "$MAC_APP_DIR" ]; then
+        echo -e "  ${C_MUTED}Note: Download history preserved. (Pass --purge to remove)${C_RESET}"
     fi
 
     if [ "$REMOVED" -gt 0 ]; then
@@ -209,15 +216,17 @@ cleanup() {
 trap cleanup EXIT
 
 INSTALLED=0
-TARBALL="down-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
+TARBALL="down-v${VERSION}-${OS}-${NORM_ARCH}.tar.gz"
 RELEASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${TARBALL}"
 CHECKSUM_URL="${RELEASE_URL}.sha256"
 
-if [ "$OS" = "linux" ] && [ "$NORM_ARCH" = "amd64" ]; then
+NPROC="$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 2)"
+
+if [ "$OS" = "linux" ] || [ "$OS" = "darwin" ]; then
     echo -e "  ${C_MUTED}Downloading:${C_RESET} ${TARBALL}"
     if ! curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$RELEASE_URL" 2>/dev/null; then
-        # Fallback check if current release has inlay prefix
-        LEGACY_TARBALL="inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz"
+        # Fallback check if current release has legacy inlay prefix or linux naming
+        LEGACY_TARBALL="inlay-v${VERSION}-${OS}-${NORM_ARCH}.tar.gz"
         LEGACY_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${LEGACY_TARBALL}"
         curl -fsSL -o "${TMP_DIR}/${TARBALL}" "$LEGACY_URL" 2>/dev/null || true
     fi
@@ -225,9 +234,13 @@ if [ "$OS" = "linux" ] && [ "$NORM_ARCH" = "amd64" ]; then
     if [ -f "${TMP_DIR}/${TARBALL}" ] && [ -s "${TMP_DIR}/${TARBALL}" ]; then
         # Check for sha256
         if curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "$CHECKSUM_URL" 2>/dev/null || \
-           curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "https://github.com/${REPO}/releases/download/v${VERSION}/inlay-v${VERSION}-linux-${NORM_ARCH}.tar.gz.sha256" 2>/dev/null; then
+           curl -fsSL -o "${TMP_DIR}/${TARBALL}.sha256" "https://github.com/${REPO}/releases/download/v${VERSION}/inlay-v${VERSION}-${OS}-${NORM_ARCH}.tar.gz.sha256" 2>/dev/null; then
             EXPECTED_HASH="$(awk '{print $1}' "${TMP_DIR}/${TARBALL}.sha256" | head -n1)"
-            ACTUAL_HASH="$(sha256sum "${TMP_DIR}/${TARBALL}" | awk '{print $1}')"
+            if command -v sha256sum >/dev/null 2>&1; then
+                ACTUAL_HASH="$(sha256sum "${TMP_DIR}/${TARBALL}" | awk '{print $1}')"
+            else
+                ACTUAL_HASH="$(shasum -a 256 "${TMP_DIR}/${TARBALL}" | awk '{print $1}')"
+            fi
             if [ "$EXPECTED_HASH" = "$ACTUAL_HASH" ]; then
                 echo -e "  ${C_GREEN}✔ SHA-256 integrity verified:${C_RESET} ${C_DIM}${ACTUAL_HASH:0:16}...${C_RESET}"
             fi
@@ -246,7 +259,7 @@ fi
 # Prefer local build if running from cloned repository
 if [ "$INSTALLED" -eq 0 ] && [ -f "./Makefile" ] && [ -f "./src/main.c" ]; then
     echo -e "  ${C_MUTED}Detected local repository checkout. Compiling...${C_RESET}"
-    make -j"$(nproc 2>/dev/null || echo 2)" >/dev/null
+    make -j"${NPROC}" >/dev/null
     if [ -f "./down" ] && [ -x "./down" ]; then
         cp "./down" "${TMP_DIR}/down"
         INSTALLED=1
@@ -255,21 +268,37 @@ fi
 
 # Fallback: Compile from Source
 if [ "$INSTALLED" -eq 0 ]; then
-    echo -e "  ${C_YELLOW}• Pre-built binary unavailable for ${OS}/${ARCH}. Building from source...${C_RESET}"
-    for tool in gcc make curl pkg-config; do
-        if ! command -v "$tool" >/dev/null 2>&1; then
-            echo -e "  ${C_RED}✖ Error: '$tool' is required to compile Down from source.${C_RESET}"
-            echo -e "    Install with: sudo apt install build-essential libcurl4-openssl-dev libssl-dev"
+    echo -e "  ${C_YELLOW}• Pre-built binary unavailable for ${OS}/${NORM_ARCH}. Building from source...${C_RESET}"
+    if [ "$OS" = "darwin" ]; then
+        COMPILER=""
+        for c in clang gcc cc; do
+            if command -v "$c" >/dev/null 2>&1; then
+                COMPILER="$c"
+                break
+            fi
+        done
+        if [ -z "$COMPILER" ] || ! command -v make >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1; then
+            echo -e "  ${C_RED}✖ Error: Xcode Command Line Tools or Homebrew dependencies are required to compile Down on macOS.${C_RESET}"
+            echo -e "    Run: xcode-select --install"
+            echo -e "    And: brew install curl openssl pkg-config"
             exit 1
         fi
-    done
+    else
+        for tool in gcc make curl pkg-config; do
+            if ! command -v "$tool" >/dev/null 2>&1; then
+                echo -e "  ${C_RED}✖ Error: '$tool' is required to compile Down from source.${C_RESET}"
+                echo -e "    Install with: sudo apt install build-essential libcurl4-openssl-dev libssl-dev"
+                exit 1
+            fi
+        done
+    fi
 
     mkdir -p "${TMP_DIR}/source"
     echo -e "  ${C_MUTED}Fetching source tree...${C_RESET}"
     curl -fsSL "https://github.com/${REPO}/archive/refs/heads/main.tar.gz" | tar -xz --strip-components=1 -C "${TMP_DIR}/source"
 
     echo -e "  ${C_MUTED}Compiling optimized C11 binaries...${C_RESET}"
-    make -C "${TMP_DIR}/source" -j"$(nproc 2>/dev/null || echo 2)" >/dev/null
+    make -C "${TMP_DIR}/source" -j"${NPROC}" >/dev/null
     if [ -f "${TMP_DIR}/source/down" ]; then
         cp "${TMP_DIR}/source/down" "${TMP_DIR}/down"
         INSTALLED=1

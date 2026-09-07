@@ -102,7 +102,11 @@ static void print_download_spec(const down_config_t *config, const down_probe_t 
     }
 
     if (!config->no_fallocate && probe->length_known) {
+#if defined(__APPLE__)
+        printf("  %sStorage%s  : Pre-allocated contiguous blocks %s(F_PREALLOCATE)%s\n", lbl, reset, dim, reset);
+#else
         printf("  %sStorage%s  : Pre-allocated contiguous blocks %s(posix_fallocate)%s\n", lbl, reset, dim, reset);
+#endif
     }
 
     if (config->max_speed_limit > 0) {

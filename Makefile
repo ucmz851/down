@@ -1,10 +1,27 @@
-CC ?= gcc
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+    CC ?= clang
+    BREW_PREFIX := $(shell brew --prefix 2>/dev/null || ( [ -d /opt/homebrew ] && echo /opt/homebrew ) || echo /usr/local)
+    OPENSSL_PREFIX := $(shell brew --prefix openssl@3 2>/dev/null || brew --prefix openssl 2>/dev/null || echo $(BREW_PREFIX)/opt/openssl)
+    CURL_PREFIX := $(shell brew --prefix curl 2>/dev/null || echo $(BREW_PREFIX)/opt/curl)
+    export PKG_CONFIG_PATH := $(OPENSSL_PREFIX)/lib/pkgconfig:$(CURL_PREFIX)/lib/pkgconfig:$(BREW_PREFIX)/lib/pkgconfig:$(PKG_CONFIG_PATH)
+    MAC_CFLAGS := -I$(BREW_PREFIX)/include -I$(OPENSSL_PREFIX)/include -I$(CURL_PREFIX)/include
+    MAC_LDFLAGS := -L$(BREW_PREFIX)/lib -L$(OPENSSL_PREFIX)/lib -L$(CURL_PREFIX)/lib
+else
+    CC ?= gcc
+    MAC_CFLAGS :=
+    MAC_LDFLAGS :=
+endif
+
 CFLAGS ?= -Wall -Wextra -pedantic -O3 -std=gnu11 -D_GNU_SOURCE -Iinclude
-CURL_CFLAGS := $(shell pkg-config --cflags libcurl)
-CURL_LIBS := $(shell pkg-config --libs libcurl)
-CRYPTO_CFLAGS := $(shell pkg-config --cflags libcrypto)
-CRYPTO_LIBS := $(shell pkg-config --libs libcrypto || echo -lcrypto)
-LIBS := $(CURL_LIBS) $(CRYPTO_LIBS) -lpthread -lm
+CFLAGS += $(MAC_CFLAGS)
+
+CURL_CFLAGS := $(shell pkg-config --cflags libcurl 2>/dev/null)
+CURL_LIBS := $(shell pkg-config --libs libcurl 2>/dev/null || echo -lcurl)
+CRYPTO_CFLAGS := $(shell pkg-config --cflags libcrypto 2>/dev/null)
+CRYPTO_LIBS := $(shell pkg-config --libs libcrypto 2>/dev/null || echo -lcrypto)
+LIBS := $(MAC_LDFLAGS) $(CURL_LIBS) $(CRYPTO_LIBS) -lpthread -lm
 
 SRCDIR := src
 INCDIR := include
@@ -37,7 +54,7 @@ clean:
 	rm -rf $(BUILDDIR) $(BIN) inlay test_* *.down *.inlay *.out *.tmp
 
 install: $(BIN)
-	install -d $(DESTDIR)$(PREFIX)/bin
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	install -m 755 $(BIN) $(DESTDIR)$(PREFIX)/bin/$(BIN)
 
 uninstall:

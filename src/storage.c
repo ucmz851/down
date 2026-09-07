@@ -27,6 +27,43 @@ int storage_init(down_storage_t *storage, const char *filepath, uint64_t total_s
         }
 
         if (!no_fallocate) {
+#if defined(__APPLE__)
+            /* macOS / Darwin (APFS & HFS+): upfront disk space allocation via fcntl F_PREALLOCATE */
+            fstore_t store = {
+                .fst_flags = F_ALLOCATECONTIG,
+                .fst_posmode = F_PEOFPOSMODE,
+                .fst_offset = 0,
+                .fst_length = (off_t)total_size,
+                .fst_bytesalloc = 0
+            };
+            if (fcntl(storage->fd, F_PREALLOCATE, &store) == -1) {
+                /* Contiguous allocation failed (e.g. fragmented disk); attempt non-contiguous */
+                store.fst_flags = F_ALLOCATEALL;
+                if (fcntl(storage->fd, F_PREALLOCATE, &store) == -1) {
+                    if (errno == ENOSPC) {
+                        fprintf(stderr, "[!] Insufficient disk space to allocate %" PRIu64 " bytes for '%s'\n",
+                                total_size, filepath);
+                        close(storage->fd);
+                        storage->fd = -1;
+                        return -1;
+                    }
+                    /* Filesystem does not support pre-allocation (e.g. NFS/FAT) -> fallback to ftruncate */
+                    if (ftruncate(storage->fd, (off_t)total_size) < 0) {
+                        fprintf(stderr, "[!] Warning: ftruncate failed: %s\n", strerror(errno));
+                    }
+                } else {
+                    storage->fallocate_used = true;
+                    if (ftruncate(storage->fd, (off_t)total_size) < 0) {
+                        fprintf(stderr, "[!] Warning: ftruncate failed: %s\n", strerror(errno));
+                    }
+                }
+            } else {
+                storage->fallocate_used = true;
+                if (ftruncate(storage->fd, (off_t)total_size) < 0) {
+                    fprintf(stderr, "[!] Warning: ftruncate failed: %s\n", strerror(errno));
+                }
+            }
+#else
             int ret = posix_fallocate(storage->fd, 0, (off_t)total_size);
             if (ret == 0) {
                 storage->fallocate_used = true;
@@ -42,6 +79,7 @@ int storage_init(down_storage_t *storage, const char *filepath, uint64_t total_s
                     fprintf(stderr, "[!] Warning: ftruncate failed: %s\n", strerror(errno));
                 }
             }
+#endif
         } else {
             if (ftruncate(storage->fd, (off_t)total_size) < 0) {
                 fprintf(stderr, "[!] Warning: ftruncate failed: %s\n", strerror(errno));
@@ -99,7 +137,9 @@ int storage_pread_all(int fd, void *buf, size_t count, off_t offset) {
 
 int storage_sync(down_storage_t *storage) {
     if (!storage || storage->fd < 0) return -1;
-#if defined(_POSIX_SYNCHRONIZED_IO) && (_POSIX_SYNCHRONIZED_IO > 0)
+#if defined(__APPLE__)
+    return (fcntl(storage->fd, F_FULLFSYNC) != -1) ? 0 : fsync(storage->fd);
+#elif defined(_POSIX_SYNCHRONIZED_IO) && (_POSIX_SYNCHRONIZED_IO > 0)
     return fdatasync(storage->fd);
 #else
     return fsync(storage->fd);

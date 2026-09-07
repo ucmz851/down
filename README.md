@@ -6,7 +6,7 @@
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
 [![Binary Size](https://img.shields.io/badge/Binary-~120%20KB-blueviolet.svg?style=flat-square)](#installation)
 
-**down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux. Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
+**down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux and macOS (Darwin / Apple Silicon & Intel). Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
 
 ---
 
@@ -104,7 +104,7 @@ Install or update to the latest version with one command:
 curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/install.sh | bash
 ```
 
-The installer automatically detects your Linux architecture, fetches the official release, verifies its SHA-256 checksum, and deploys `down` into `~/.local/bin` (or `/usr/local/bin` if privileged).
+The installer automatically detects your operating system (Linux or macOS) and architecture (Apple Silicon `arm64` or Intel `x86_64`), fetches the official release, verifies its SHA-256 checksum, and deploys `down` into `~/.local/bin` (or `/usr/local/bin` if privileged).
 
 > [!TIP]
 > **Built-in Self-Updater**: Once installed, you can update `down` in-place anytime directly from your terminal by running:
@@ -118,21 +118,32 @@ The installer automatically detects your Linux architecture, fetches the officia
 Download standalone pre-built binaries directly from [GitHub Releases](https://github.com/ucmz851/down/releases):
 
 ```bash
-# Example for Linux x86_64 / amd64:
+# Linux x86_64 (amd64):
 tar -xzf down-v0.0.1-linux-amd64.tar.gz
 install -m 755 down ~/.local/bin/down
+
+# macOS Apple Silicon (arm64 / M-series):
+tar -xzf down-v0.0.1-darwin-arm64.tar.gz
+install -m 755 down /usr/local/bin/down
+
+# macOS Intel (x86_64):
+tar -xzf down-v0.0.1-darwin-amd64.tar.gz
+install -m 755 down /usr/local/bin/down
 ```
 
 ### Method 3: Build from Source
 
 #### Prerequisites
-- C11-compliant compiler (`gcc` or `clang`)
+- C11-compliant compiler (`gcc` or Apple `clang`)
 - `make` and `pkg-config`
 - `libcurl` (development headers)
 - `OpenSSL` (`libcrypto` development headers)
-- Linux kernel 2.6.14+ (for `posix_fallocate`)
+- Linux kernel 2.6.14+ (`posix_fallocate`) or macOS 10.10+ Darwin (`fcntl F_PREALLOCATE`)
 
 ```bash
+# macOS (Homebrew):
+brew install curl openssl pkg-config
+
 # Debian / Ubuntu / Mint / Pop!_OS:
 sudo apt install build-essential libcurl4-openssl-dev libssl-dev pkg-config
 
@@ -145,7 +156,7 @@ sudo dnf install gcc make libcurl-devel openssl-devel pkgconfig
 # Clone and compile:
 git clone https://github.com/ucmz851/down.git
 cd down
-make -j$(nproc)
+make -j$(nproc 2>/dev/null || sysctl -n hw.ncpu)
 make test
 sudo make install
 ```
@@ -474,8 +485,8 @@ Updates & Maintenance:
 ## 🏗️ Technical Architecture
 
 ### 1. Positional Storage Subsystem
-Unlike traditional download tools that download chunks into dozens of `.part` scratch files and merge them upon completion, down relies on Linux positional file primitives:
-- `posix_fallocate()` pre-allocates contiguous physical blocks before connecting, eliminating extent fragmentation on ext4/Btrfs/XFS and guaranteeing upfront disk space.
+Unlike traditional download tools that download chunks into dozens of `.part` scratch files and merge them upon completion, down relies on high-performance POSIX positional file primitives:
+- Contiguous physical disk blocks are allocated upfront (`posix_fallocate()` on Linux, `fcntl(F_PREALLOCATE)` on macOS APFS/HFS+), eliminating extent fragmentation and guaranteeing sufficient disk space before any network transfer starts.
 - Worker threads issue atomic `pwrite(2)` system calls directly to designated byte offsets in a shared file descriptor, completely avoiding file-handle mutex contention.
 
 ### 2. Work-Stealing Scheduling
@@ -533,7 +544,7 @@ curl -fsSL https://raw.githubusercontent.com/ucmz851/down/main/uninstall.sh | ba
 
 - **[curl / libcurl](https://curl.se/)** (Daniel Stenberg & contributors) — For the world-class, battle-tested network transfer foundation powering down's HTTP/1.1, HTTP/2, and HTTP/3 (QUIC) multiplexing.
 - **[OpenSSL](https://www.openssl.org/)** (The OpenSSL Project) — For the robust cryptographic engine powering real-time checksum verification (SHA-256, SHA-512, MD5, SHA-1, BLAKE2) and AWS SigV4 HMAC-SHA256 request signing.
-- **The Linux Kernel & POSIX Community** — For providing the rock-solid positional I/O primitives (`posix_fallocate`, `pwrite`, `mmap`, `msync`) that make zero-copy lockless segmented downloads possible.
+- **The Linux Kernel, macOS Darwin & POSIX Community** — For providing the rock-solid positional I/O primitives (`posix_fallocate`, `fcntl F_PREALLOCATE`, `pwrite`, `mmap`, `msync`) that make zero-copy lockless segmented downloads possible.
 
 ---
 

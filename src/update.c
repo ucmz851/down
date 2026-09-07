@@ -1,6 +1,9 @@
 #include "update.h"
 #include <sys/utsname.h>
 #include <libgen.h>
+#if defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 typedef struct {
     char *data;
@@ -172,14 +175,27 @@ int update_check_and_apply(bool auto_install) {
         }
     }
 
-    /* 1. Identify current binary path via /proc/self/exe */
+    /* 1. Identify current binary path */
     char exe_path[1024];
+#if defined(__APPLE__)
+    uint32_t size = sizeof(exe_path);
+    if (_NSGetExecutablePath(exe_path, &size) != 0) {
+        fprintf(stderr, "[!] Could not determine path to running binary\n");
+        return -1;
+    }
+    char real_exe_path[1024];
+    if (realpath(exe_path, real_exe_path) != NULL) {
+        strncpy(exe_path, real_exe_path, sizeof(exe_path) - 1);
+        exe_path[sizeof(exe_path) - 1] = '\0';
+    }
+#else
     ssize_t link_len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
     if (link_len <= 0) {
         fprintf(stderr, "[!] Could not determine path to running binary\n");
         return -1;
     }
     exe_path[link_len] = '\0';
+#endif
 
     /* 2. Test directory write permissions */
     char exe_dir_copy[1024];
@@ -193,12 +209,18 @@ int update_check_and_apply(bool auto_install) {
         return -1;
     }
 
-    /* 3. Detect architecture */
+    /* 3. Detect operating system and architecture */
     struct utsname u;
     if (uname(&u) != 0) {
         fprintf(stderr, "[!] Could not detect system architecture\n");
         return -1;
     }
+
+#if defined(__APPLE__)
+    const char *os_name = "darwin";
+#else
+    const char *os_name = "linux";
+#endif
 
     const char *arch = "amd64";
     if (strcmp(u.machine, "x86_64") == 0) {
@@ -210,8 +232,8 @@ int update_check_and_apply(bool auto_install) {
     /* 4. Construct release tarball URL */
     char download_url[512];
     snprintf(download_url, sizeof(download_url),
-             "https://github.com/ucmz851/down/releases/download/v%s/down-v%s-linux-%s.tar.gz",
-             clean_tag, clean_tag, arch);
+             "https://github.com/ucmz851/down/releases/download/v%s/down-v%s-%s-%s.tar.gz",
+             clean_tag, clean_tag, os_name, arch);
 
     char tmp_tar[512];
     snprintf(tmp_tar, sizeof(tmp_tar), "/tmp/down_update_%d.tar.gz", (int)getpid());

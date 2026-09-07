@@ -78,7 +78,11 @@ int history_get_path(char *buf, size_t buf_sz) {
     } else {
         const char *home = getenv("HOME");
         if (home && *home) {
+#if defined(__APPLE__)
+            snprintf(dir, sizeof(dir), "%s/Library/Application Support/down", home);
+#else
             snprintf(dir, sizeof(dir), "%s/.local/state/down", home);
+#endif
         } else {
             snprintf(dir, sizeof(dir), ".");
         }
