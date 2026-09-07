@@ -138,62 +138,81 @@ static void *telemetry_thread_fn(void *arg) {
         if (is_tty) {
             int term_cols = 80;
             struct winsize ws;
-            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 30) {
+            if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == 0 && ws.ws_col > 10) {
                 term_cols = ws.ws_col;
             }
 
-            /* Dynamically allocate progress bar width to fit the terminal */
-            int bar_width = term_cols - 64;
-            if (bar_width < 10) bar_width = 10;
-            if (bar_width > 35) bar_width = 35;
-
-            double progress = (total > 0) ? ((double)cur_bytes / (double)total) : 0.0;
-            if (progress < 0.0) progress = 0.0;
-            if (progress > 1.0) progress = 1.0;
-
-            double total_units = progress * (double)bar_width;
-            int full_blocks = (int)total_units;
-            int frac_idx = (int)((total_units - (double)full_blocks) * 8.0);
-            if (frac_idx > 7) frac_idx = 7;
-            bool has_frac = (frac_idx > 0);
-            int empty_blocks = bar_width - full_blocks - (has_frac ? 1 : 0);
-            if (empty_blocks < 0) empty_blocks = 0;
-
-            /* Build graphical bar */
-            char bar_buf[256] = {0};
-            size_t bpos = 0;
-
-            for (int i = 0; i < full_blocks && bpos + 4 < sizeof(bar_buf); i++) {
-                bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "█");
-            }
-            if (has_frac && bpos + 4 < sizeof(bar_buf)) {
-                bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "%s", sub_blocks[frac_idx]);
-            }
-            bar_buf[bpos] = '\0';
-
-            char empty_buf[128] = {0};
-            size_t epos = 0;
-            for (int i = 0; i < empty_blocks && epos + 4 < sizeof(empty_buf); i++) {
-                epos += (size_t)snprintf(empty_buf + epos, sizeof(empty_buf) - epos, "░");
-            }
-            empty_buf[epos] = '\0';
-
-            /* Render clean, instantaneous progress bar with ANSI colors */
-            if (color) {
-                printf("\r\033[K \033[1;37m%5.1f%%\033[0m \033[38;5;242m▕\033[38;5;39m%s\033[38;5;238m%s\033[38;5;242m▏\033[0m "
-                       "\033[1m%s\033[0m/%s  \033[1;32m%10s\033[0m  \033[1;33mETA %s\033[0m  \033[38;5;38m(%d conn)\033[0m",
-                       percent, bar_buf, empty_buf,
-                       cur_str, tot_str,
-                       spd_str,
-                       (instant_speed > 512.0 ? eta_str : "--:--"),
-                       active_conn);
+            /* Build right-side info string adaptively based on available terminal columns */
+            char info_buf[256];
+            if (term_cols >= 95) {
+                snprintf(info_buf, sizeof(info_buf), "%s/%s  %s  ETA %s  (%d conn)",
+                         cur_str, tot_str, spd_str,
+                         (instant_speed > 512.0 ? eta_str : "--:--"),
+                         active_conn);
+            } else if (term_cols >= 75) {
+                snprintf(info_buf, sizeof(info_buf), "%s/%s  %s  ETA %s",
+                         cur_str, tot_str, spd_str,
+                         (instant_speed > 512.0 ? eta_str : "--:--"));
+            } else if (term_cols >= 55) {
+                snprintf(info_buf, sizeof(info_buf), "%s/%s  %s",
+                         cur_str, tot_str, spd_str);
+            } else if (term_cols >= 38) {
+                snprintf(info_buf, sizeof(info_buf), "%s", spd_str);
             } else {
-                printf("\r\033[K %5.1f%% ▕%s%s▏ %s/%s  %10s  ETA %s  (%d conn)",
-                       percent, bar_buf, empty_buf,
-                       cur_str, tot_str,
-                       spd_str,
-                       (instant_speed > 512.0 ? eta_str : "--:--"),
-                       active_conn);
+                info_buf[0] = '\0';
+            }
+
+            int info_len = (int)strlen(info_buf);
+            /* Fixed overhead: " 100.0% " (8) + "▕▏ " (3) = 11 columns */
+            int fixed_overhead = 8 + 3 + info_len;
+            int bar_width = term_cols - fixed_overhead - 2; /* 2 cols safety margin against wrapping */
+            if (bar_width > 30) bar_width = 30;
+
+            if (bar_width >= 6) {
+                /* Render graphical bar with adaptive width */
+                double progress = (total > 0) ? ((double)cur_bytes / (double)total) : 0.0;
+                if (progress < 0.0) progress = 0.0;
+                if (progress > 1.0) progress = 1.0;
+
+                double total_units = progress * (double)bar_width;
+                int full_blocks = (int)total_units;
+                int frac_idx = (int)((total_units - (double)full_blocks) * 8.0);
+                if (frac_idx > 7) frac_idx = 7;
+                bool has_frac = (frac_idx > 0);
+                int empty_blocks = bar_width - full_blocks - (has_frac ? 1 : 0);
+                if (empty_blocks < 0) empty_blocks = 0;
+
+                char bar_buf[256] = {0};
+                size_t bpos = 0;
+                for (int i = 0; i < full_blocks && bpos + 4 < sizeof(bar_buf); i++) {
+                    bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "█");
+                }
+                if (has_frac && bpos + 4 < sizeof(bar_buf)) {
+                    bpos += (size_t)snprintf(bar_buf + bpos, sizeof(bar_buf) - bpos, "%s", sub_blocks[frac_idx]);
+                }
+                bar_buf[bpos] = '\0';
+
+                char empty_buf[128] = {0};
+                size_t epos = 0;
+                for (int i = 0; i < empty_blocks && epos + 4 < sizeof(empty_buf); i++) {
+                    epos += (size_t)snprintf(empty_buf + epos, sizeof(empty_buf) - epos, "░");
+                }
+                empty_buf[epos] = '\0';
+
+                if (color) {
+                    printf("\r\033[2K \033[1;37m%5.1f%%\033[0m \033[38;5;242m▕\033[38;5;39m%s\033[38;5;238m%s\033[38;5;242m▏\033[0m %s",
+                           percent, bar_buf, empty_buf, info_buf);
+                } else {
+                    printf("\r\033[2K %5.1f%% ▕%s%s▏ %s",
+                           percent, bar_buf, empty_buf, info_buf);
+                }
+            } else {
+                /* Compact text-only mode for very small terminal tiles/splits */
+                if (color) {
+                    printf("\r\033[2K \033[1;37m%5.1f%%\033[0m  %s", percent, info_buf);
+                } else {
+                    printf("\r\033[2K %5.1f%%  %s", percent, info_buf);
+                }
             }
             fflush(stdout);
         } else {
