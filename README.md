@@ -1,4 +1,4 @@
-# Down
+# down
 
 [![Language: C11](https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square)](LICENSE)
@@ -6,7 +6,7 @@
 [![Tests](https://img.shields.io/badge/Tests-100%25%20Passing-brightgreen.svg?style=flat-square)](#test-suite)
 [![Binary Size](https://img.shields.io/badge/Binary-~120%20KB-blueviolet.svg?style=flat-square)](#installation)
 
-**Down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux. Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
+**down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux. Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
 
 ---
 
@@ -50,7 +50,7 @@ down --history
 
 ## 📊 Feature Comparison
 
-| Feature | Down | aria2c | curl | wget | axel |
+| Feature | down | aria2c | curl | wget | axel |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Language** | **C11** | C++ | C | C | C |
 | **Binary Size (Stripped)** | **~120 KB** | ~4.5 MB | ~3.2 MB | ~1.8 MB | ~130 KB |
@@ -187,7 +187,7 @@ If multiple downloads were interrupted, option `[1]` lets you **resume all of th
 
 ### 3. 📜 Download History & Session Management
 
-Down maintains a lightweight, zero-dependency history log in `$XDG_STATE_HOME/down/history.tsv`:
+down maintains a lightweight, zero-dependency history log in `$XDG_STATE_HOME/down/history.tsv`:
 
 ```bash
 # View complete history table of completed, resumable, and interrupted downloads:
@@ -270,7 +270,7 @@ down --http3-only https://cloudflare-quic.com/test.iso
 
 ### 8. ☁️ AWS S3 & Cloudflare R2 Authentication
 
-Down natively computes AWS SigV4 signatures without external dependencies:
+down natively computes AWS SigV4 signatures without external dependencies:
 
 ```bash
 # Standard AWS credentials from environment variables:
@@ -337,7 +337,7 @@ down -H "Authorization: Bearer <token>" -H "X-API-Key: key123" https://api.examp
 
 ## ⚙️ Configuration File
 
-Down supports persistent configuration so you don't need to pass favorite flags every time.
+down supports persistent configuration so you don't need to pass favorite flags every time.
 
 ### File Locations (Checked in order):
 1. `--config <path>` (explicit command-line path)
@@ -441,18 +441,18 @@ Updates & Maintenance:
 ## 🏗️ Technical Architecture
 
 ### 1. Positional Storage Subsystem
-Unlike traditional download tools that download chunks into dozens of `.part` scratch files and merge them upon completion, Down relies on Linux positional file primitives:
+Unlike traditional download tools that download chunks into dozens of `.part` scratch files and merge them upon completion, down relies on Linux positional file primitives:
 - `posix_fallocate()` pre-allocates contiguous physical blocks before connecting, eliminating extent fragmentation on ext4/Btrfs/XFS and guaranteeing upfront disk space.
 - Worker threads issue atomic `pwrite(2)` system calls directly to designated byte offsets in a shared file descriptor, completely avoiding file-handle mutex contention.
 
 ### 2. Work-Stealing Scheduling
-Connection throughput fluctuates dynamically over real-world routes. Down solves this with an atomic work-stealing scheduler:
+Connection throughput fluctuates dynamically over real-world routes. down solves this with an atomic work-stealing scheduler:
 - The byte range is divided into uniform chunks (default: 512 KB).
 - Workers lease runs of contiguous chunks to preserve sequential disk locality.
 - When unassigned chunks are exhausted, idle workers dynamically bisect the remaining byte range of slower tail connections, launching concurrent Range requests to process the upper half.
 
 ### 3. Memory-Mapped Crash Recovery
-When a download begins, Down memory-maps (`mmap`) a compact control file (`<output>.down`):
+When a download begins, down memory-maps (`mmap`) a compact control file (`<output>.down`):
 - A header records the target URL, resource size, chunk size, and timestamp.
 - An atomic bitfield tracks completion state per chunk (1 bit per chunk: a 10 GB file needs only ~2.5 KB of metadata).
 - If terminated, `-c` (or the interactive wizard) re-maps the state file and resumes missing chunks without disk scanning.
@@ -482,7 +482,7 @@ Tests include:
 
 ## 🗑️ Uninstallation
 
-To remove Down from your system:
+To remove down from your system:
 
 ```bash
 # Automated uninstallation:
