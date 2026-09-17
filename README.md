@@ -12,6 +12,7 @@
 </p>
 
 <p align="center">
+  <a href="https://ucmz851.github.io/down/"><img src="https://img.shields.io/badge/Website-ucmz851.github.io%2Fdown-blue?style=flat-square&logo=googlechrome&logoColor=white" alt="Website" /></a>
   <a href="https://en.wikipedia.org/wiki/C11_(C_standard_revision)"><img src="https://img.shields.io/badge/Language-C11-00599C.svg?style=flat-square&logo=c" alt="Language: C11" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT" /></a>
   <a href="https://github.com/ucmz851/down/releases/latest"><img src="https://img.shields.io/github/v/release/ucmz851/down?style=flat-square&color=green" alt="Release" /></a>
@@ -19,7 +20,11 @@
   <a href="#installation"><img src="https://img.shields.io/badge/Binary-~120%20KB-blueviolet.svg?style=flat-square" alt="Binary Size" /></a>
 </p>
 
-**down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux and macOS (Darwin / Apple Silicon & Intel). Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery.
+<p align="center">
+  🌐 <strong>Official Website & Documentation: <a href="https://ucmz851.github.io/down/">https://ucmz851.github.io/down/</a></strong>
+</p>
+
+**down** is a lightweight, blazing-fast segmented download accelerator implemented in modern C11 for Linux and macOS (Darwin / Apple Silicon & Intel). Engineered for multi-gigabit network saturation and high-speed NVMe storage, it combines lockless positional I/O with dynamic work-stealing scheduling, native HTTP/3 (QUIC) support, direct AWS S3 / Cloudflare R2 SigV4 authentication, an intuitive interactive wizard, and zero-rehash crash recovery. Explore the interactive documentation and benchmarks on the [official product website](https://ucmz851.github.io/down/).
 
 ---
 
